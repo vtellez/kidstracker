@@ -524,7 +524,7 @@ async function doPull(){
    Consulta la nube cada POLL_MS solo si la app está en primer plano,
    y se autopausa si nadie la toca ni llegan cambios (IDLE_STOP_MS),
    para que una tablet abierta y olvidada no agote las 10k req/mes. */
-const POLL_MS = 15000;        // cada cuánto comprueba estando visible
+const POLL_MS = 5000;         // cada cuánto comprueba estando visible
 const IDLE_STOP_MS = 90000;   // sin interacción ni cambios → deja de consultar
 let pollTimer = null, pulling = false, lastActivity = Date.now();
 function bumpActivity(){ lastActivity = Date.now(); startPolling(); }
