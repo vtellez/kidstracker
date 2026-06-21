@@ -502,39 +502,49 @@ function openSyncSettings(){
     const on = syncOn();
     openSheet(`
       <h2>☁️ Sincronizar entre dispositivos</h2>
-      <div class="sub">Comparte los datos de todos los dispositivos con un único <b>código</b>.</div>
+      <div class="sub">Todos los dispositivos comparten los datos usando un único <b>código</b>.</div>
       ${ on ? `
         <div class="field">
           <label>Estado</label>
           <div class="editrow"><span class="n">✅ Sincronización activada</span></div>
         </div>
         <div class="field">
-          <label>Tu código (pégalo en tus otros dispositivos)</label>
+          <label>👉 Tu CÓDIGO (esto es lo que tienes que pegar en los demás dispositivos)</label>
           <input type="text" id="syncCode" readonly onclick="this.select()" value="${makeCode()}">
-          <button class="btn ghost" onclick="copyCode()">📋 Copiar código</button>
+          <button class="btn" onclick="copyCode()">📋 Copiar código</button>
+          <p class="sub" style="margin-top:8px">En la tablet/móvil: abre la app → ☁️ Nube → pega <b>este código</b> (no la clave) → Conectar.</p>
         </div>
         <button class="btn ghost" onclick="forcePull()">⬇️ Traer datos de la nube ahora</button>
         <button class="btn danger" onclick="disconnectSync()">Desconectar este dispositivo</button>
       ` : `
         <div class="field">
-          <label>Dispositivo principal</label>
-          <input type="text" id="jbKey" placeholder="Pega tu Master Key de jsonbin.io">
-          <button class="btn" onclick="activateSync()">Activar y crear mi nube</button>
+          <label>Pega aquí tu clave o tu código</label>
+          <input type="text" id="syncInput" placeholder="Master Key (1er dispositivo) o código (los demás)">
+          <button class="btn" onclick="smartSync()">Continuar</button>
         </div>
-        <div class="field">
-          <label>Otro dispositivo (ya tengo un código)</label>
-          <input type="text" id="joinCode" placeholder="Pega aquí el código">
-          <button class="btn ghost" onclick="joinSync()">Conectar con el código</button>
-        </div>
-        <p class="sub">La clave se saca una sola vez en <b>jsonbin.io → API KEYS → Master Key</b> (cuenta gratuita).</p>
+        <p class="sub">
+          • <b>Primer dispositivo</b>: pega tu <b>Master Key</b> de jsonbin.io (API KEYS). Crea la nube y te da un código.<br>
+          • <b>Los demás dispositivos</b>: pega el <b>código</b> que te dio el primero.<br>
+          La app detecta sola qué has pegado. ⚠️ No uses la clave en cada dispositivo: crearía nubes separadas.
+        </p>
       `}
       <button class="btn ghost" onclick="closeSheet()">Cerrar</button>`);
   };
   if(state.pin) askPin(open); else open();
 }
-async function activateSync(){
-  const key = document.getElementById("jbKey").value.trim();
-  if(!key){ toast("Pega tu clave de JSONBin 🔑"); return; }
+
+/* Detecta automáticamente si lo pegado es un CÓDIGO o una CLAVE */
+function looksLikeCode(v){
+  try{ const o = parseCode(v); return !!(o && o.key && o.binId); }
+  catch(e){ return false; }
+}
+async function smartSync(){
+  const v = (document.getElementById("syncInput").value || "").trim();
+  if(!v){ toast("Pega tu clave o el código 🙂"); return; }
+  if(looksLikeCode(v)) await joinWith(parseCode(v));   // es un código → conectar
+  else await activateWith(v);                          // es una clave → crear nube
+}
+async function activateWith(key){
   toast("Creando tu nube…");
   try{
     state.updatedAt = Date.now();
@@ -542,14 +552,11 @@ async function activateSync(){
     sync = { key, binId }; saveSync();
     setSyncUI("ok"); render();
     openSyncSettings(); // muestra el código para compartir
-    toast("✅ Sincronización activada");
-  }catch(e){ toast("No se pudo activar (clave correcta?) — "+e.message); }
+    toast("✅ Nube creada — copia el código");
+  }catch(e){ toast("No se pudo activar (¿clave correcta?) — "+e.message); }
 }
-async function joinSync(){
-  const code = document.getElementById("joinCode").value.trim();
-  if(!code){ toast("Pega el código 🙂"); return; }
-  let cfg; try{ cfg = parseCode(code); }catch(e){ toast("Código no válido 😕"); return; }
-  if(!cfg.key || !cfg.binId){ toast("Código no válido 😕"); return; }
+async function joinWith(cfg){
+  if(!cfg || !cfg.key || !cfg.binId){ toast("Código no válido 😕"); return; }
   toast("Conectando…");
   try{
     const cloud = await jbRead(cfg.key, cfg.binId);
