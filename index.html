@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#7c5cff" />
+<title>⭐ Mis Estrellas — Tracker de hábitos</title>
+
+<!-- ============================================================
+     ☁️  SINCRONIZACIÓN ENTRE DISPOSITIVOS (sencilla, sin servidor propio)
+     ------------------------------------------------------------
+     Usa JSONBin.io (gratis). NO hay que configurar nada en este
+     archivo: todo se hace dentro de la app (botón "☁️ Sincronizar").
+
+     Una sola vez:
+       1) Entra en https://jsonbin.io y crea una cuenta gratis
+          (puedes usar una cuenta dedicada solo para esto).
+       2) En jsonbin.io → "API KEYS" copia tu MASTER KEY.
+       3) En la app → Ajustes/botón ☁️ → pega la clave y pulsa
+          "Activar". La app crea tu nube y te da un CÓDIGO.
+       4) En los demás dispositivos pega ese mismo CÓDIGO.
+
+     Funciona incluso abriendo el archivo directamente (file://).
+     Sin sincronizar, la app funciona igual con guardado local.
+     ============================================================ -->
+<style>
+  :root{
+    --bg1:#fff4f9; --bg2:#eef4ff;
+    --card:#ffffff;
+    --ink:#3a2c5a;
+    --muted:#9a8fb8;
+    --accent:#7c5cff;
+    --accent2:#ff7ab8;
+    --good:#34d399;
+    --bad:#f59e0b;
+    --bad2:#ef6c4d;
+    --gold:#ffc23c;
+    --shadow:0 10px 30px rgba(124,92,255,.18);
+    --radius:24px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family:"Baloo 2", system-ui, "Segoe UI", -apple-system, Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, #ffe6f3 0%, transparent 55%),
+      radial-gradient(1000px 500px at 110% 0%, #e2ecff 0%, transparent 50%),
+      linear-gradient(160deg, var(--bg1), var(--bg2));
+    color:var(--ink);
+    min-height:100dvh;
+    padding:14px 14px 120px;
+    max-width:760px;
+    margin:0 auto;
+    overflow-x:hidden;
+  }
+  h1,h2,h3{margin:0; font-weight:800;}
+  button{font-family:inherit; cursor:pointer; border:none; background:none;}
+
+  /* ---------- Brand header ---------- */
+  .brandbar{display:flex; align-items:center; gap:8px; margin:2px 2px 10px; font-weight:900; font-size:17px; color:var(--accent);}
+  .brandbar .sp{flex:1;}
+  .brandbar .miniinfo{font-size:12px; font-weight:800; color:var(--muted);}
+
+  /* ---------- Hero ---------- */
+  .hero{
+    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    color:#fff; border-radius:var(--radius); padding:18px 20px; margin:8px 0 16px;
+    box-shadow:var(--shadow); position:relative; overflow:hidden;
+  }
+  .hero .date{opacity:.9; font-size:14px; font-weight:700; text-transform:capitalize;}
+  .hero h1{font-size:24px; margin:2px 0 12px; display:flex; align-items:center; gap:10px;}
+  .hero .stats{display:flex; gap:10px; flex-wrap:wrap;}
+  .stat{background:rgba(255,255,255,.22); border-radius:16px; padding:8px 14px; font-weight:800; font-size:15px; display:flex; align-items:center; gap:6px; backdrop-filter:blur(4px);}
+  .stat b{font-size:20px;}
+  .progress{margin-top:14px; background:rgba(255,255,255,.25); border-radius:999px; height:18px; overflow:hidden;}
+  .progress > span{display:block; height:100%; width:0; background:linear-gradient(90deg,#fff,#ffe9a8); border-radius:999px; transition:width .5s cubic-bezier(.2,.8,.2,1);}
+  .hero .pct{font-size:13px; font-weight:800; margin-top:6px; opacity:.95;}
+
+  .level{position:absolute; top:14px; right:16px; text-align:center; }
+  .level .badge{font-size:34px; filter:drop-shadow(0 4px 6px rgba(0,0,0,.2));}
+  .level .lvl{font-size:11px; font-weight:800; background:rgba(255,255,255,.25); border-radius:999px; padding:2px 9px; display:inline-block; margin-top:2px;}
+
+  /* ---------- Daily score badge ---------- */
+  .dayscore{
+    display:flex; align-items:center; gap:14px; margin-top:14px;
+    background:rgba(255,255,255,.18); border-radius:18px; padding:12px 14px; backdrop-filter:blur(4px);
+  }
+  .dayscore .face{font-size:42px; line-height:1;}
+  .dayscore .num{font-size:34px; font-weight:900; line-height:1;}
+  .dayscore .lab{font-size:13px; font-weight:800; opacity:.95;}
+  .dayscore .col{flex:1;}
+
+  /* ---------- Section ---------- */
+  .sec-title{display:flex; align-items:center; justify-content:space-between; margin:18px 4px 10px;}
+  .sec-title h2{font-size:19px;}
+  .sec-title .hint{font-size:13px; color:var(--muted); font-weight:700;}
+
+  /* ---------- Habit grid ---------- */
+  .habits{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
+  @media(min-width:560px){ .habits{grid-template-columns:repeat(3,1fr);} }
+  .habit{
+    background:var(--card); border-radius:22px; padding:16px 12px 14px; text-align:center;
+    box-shadow:0 6px 16px rgba(124,92,255,.10); position:relative; user-select:none;
+    border:3px solid transparent; transition:transform .12s, box-shadow .2s, border-color .2s;
+    min-height:118px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  }
+  .habit:active{transform:scale(.94);}
+  .habit .emoji{font-size:42px; line-height:1; transition:transform .2s;}
+  .habit .name{font-size:14px; font-weight:800; color:var(--ink); line-height:1.15;}
+  .habit .star{position:absolute; top:8px; right:9px; font-size:20px; opacity:.18; transition:.25s;}
+  .habit.done{border-color:var(--good); background:linear-gradient(180deg,#f0fff8,#ffffff);}
+  .habit.done .star{opacity:1; transform:scale(1.25) rotate(8deg);}
+  .habit.done .emoji{transform:scale(1.08);}
+  .habit.done::after{content:"¡Bien!"; position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:800; color:var(--good);}
+  .habit .pts{position:absolute; top:8px; left:9px; font-size:11px; font-weight:800; color:var(--muted); background:#f3f0ff; border-radius:999px; padding:1px 7px;}
+
+  /* negative habits */
+  .habit.neg .star{content:"";}
+  .habit.neg{background:linear-gradient(180deg,#fffaf0,#ffffff);}
+  .habit.neg .emoji{filter:grayscale(.1);}
+  .habit.neg .pts{color:var(--bad2); background:#fff1e6;}
+  .habit.neg.hit{border-color:var(--bad); background:linear-gradient(180deg,#fff3e0,#ffffff);}
+  .habit.neg .count{
+    position:absolute; top:8px; right:9px; min-width:24px; height:24px; padding:0 6px;
+    background:var(--bad); color:#fff; border-radius:999px; font-size:13px; font-weight:900;
+    display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(.5); transition:.2s;
+  }
+  .habit.neg.hit .count{opacity:1; transform:scale(1);}
+  .habit.neg.hit::after{content:"a mejorar"; position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:800; color:var(--bad2);}
+  .habit .minus{
+    position:absolute; bottom:6px; right:8px; width:26px; height:26px; border-radius:50%;
+    background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.12); font-size:16px; font-weight:900; color:var(--bad2);
+    display:none; align-items:center; justify-content:center;
+  }
+  .habit.neg.hit .minus{display:flex;}
+
+  /* ---------- Week strip ---------- */
+  .week{display:flex; gap:8px; justify-content:space-between;}
+  .day{flex:1; background:var(--card); border-radius:16px; padding:10px 4px; text-align:center; box-shadow:0 4px 12px rgba(124,92,255,.08);}
+  .day .dn{font-size:11px; color:var(--muted); font-weight:800; text-transform:uppercase;}
+  .day .dd{font-size:16px; font-weight:800; margin:3px 0;}
+  .day .ring{font-size:14px; font-weight:900;}
+  .day.today{border:3px solid var(--accent);}
+  .day.pos .ring{color:var(--good);}
+  .day.neg .ring{color:var(--bad2);}
+  .day.zero .ring{color:var(--muted);}
+
+  /* ---------- Chart ---------- */
+  .chartcard{background:var(--card); border-radius:var(--radius); padding:16px 12px 8px; box-shadow:var(--shadow);}
+  .chartcard svg{width:100%; height:auto; display:block;}
+  .chart-legend{display:flex; gap:16px; justify-content:center; font-size:12px; font-weight:800; color:var(--muted); margin-top:6px;}
+  .chart-legend span{display:flex; align-items:center; gap:5px;}
+  .chart-legend i{width:12px; height:12px; border-radius:4px; display:inline-block;}
+
+  /* ---------- Reward bar ---------- */
+  .reward{background:var(--card); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); margin-top:8px;}
+  .reward .row{display:flex; align-items:center; gap:12px;}
+  .reward .big{font-size:40px;}
+  .reward .txt{flex:1;}
+  .reward .txt b{font-size:16px;}
+  .reward .txt p{margin:2px 0 0; font-size:13px; color:var(--muted); font-weight:700;}
+  .reward .bar{margin-top:12px; background:#f0ecff; border-radius:999px; height:14px; overflow:hidden;}
+  .reward .bar > span{display:block; height:100%; background:linear-gradient(90deg,var(--gold),#ffd877); width:0; transition:width .6s;}
+  .reward.won{background:linear-gradient(135deg,#fff7e6,#fff); border:2px solid var(--gold);}
+  .reward .editp{margin-top:10px; font-size:13px; font-weight:800; color:var(--accent); background:#f3f0ff; border-radius:12px; padding:8px 12px; width:100%;}
+
+  /* ---------- Dock (barra inferior tipo app, ancho completo) ---------- */
+  .dock{
+    position:fixed; left:0; right:0; bottom:0;
+    display:flex; align-items:flex-end; gap:2px;
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+    background:rgba(255,255,255,.93);
+    backdrop-filter:blur(18px) saturate(1.3); -webkit-backdrop-filter:blur(18px) saturate(1.3);
+    border-top:1px solid rgba(58,44,90,.10);
+    box-shadow:0 -6px 22px rgba(58,44,90,.10);
+    z-index:40;
+  }
+  .dock .sep{flex:0 0 1px; align-self:stretch; background:rgba(58,44,90,.10); margin:6px 4px;}
+  .dockitem{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    flex:1 1 0; min-width:0; padding:3px 2px; transition:transform .14s;
+  }
+  .dockitem:active{transform:scale(.9);}
+  .dockitem .ic{
+    width:42px; height:42px; border-radius:14px; display:grid; place-items:center; font-size:22px;
+    background:#f3effe; box-shadow:0 2px 7px rgba(124,92,255,.12); transition:transform .16s, box-shadow .16s;
+  }
+  .dockitem .lb{font-size:10px; font-weight:800; color:var(--muted); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* niños */
+  .dockitem.kid .ic{border-radius:50%;}
+  .dockitem.kid.active .ic{transform:translateY(-6px) scale(1.05); box-shadow:0 0 0 3px var(--accent), 0 8px 16px rgba(124,92,255,.28);}
+  .dockitem.kid.active .lb{color:var(--accent);}
+  .dockitem.add .ic{color:var(--accent); font-size:25px; font-weight:900;}
+  /* acciones */
+  .dockitem.action.primary .ic{background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;}
+  .dockitem.sync.on .ic{background:linear-gradient(135deg,#e9fbf3,#d6f7ea); color:#0d9b6c;}
+  .dockitem.sync.saving .ic{background:#fff7e0;}
+  .dockitem.sync.err .ic{background:#ffeceb; color:var(--bad2);}
+
+  /* ---------- Modal ---------- */
+  .overlay{position:fixed; inset:0; background:rgba(58,44,90,.45); backdrop-filter:blur(3px); display:none; align-items:flex-end; justify-content:center; z-index:50;}
+  .overlay.open{display:flex;}
+  .sheet{
+    background:#fff; width:100%; max-width:760px; border-radius:28px 28px 0 0; padding:18px 18px 28px;
+    max-height:88dvh; overflow:auto; box-shadow:0 -10px 40px rgba(0,0,0,.2); animation:up .25s ease;
+  }
+  @keyframes up{from{transform:translateY(40px); opacity:.4;} to{transform:none; opacity:1;}}
+  .sheet h2{font-size:20px; margin-bottom:4px;}
+  .sheet .sub{color:var(--muted); font-weight:700; font-size:14px; margin-bottom:14px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-weight:800; font-size:14px; margin-bottom:6px;}
+  .field input[type=text]{width:100%; padding:12px 14px; border-radius:14px; border:2px solid #eee; font-size:16px; font-family:inherit; font-weight:700; color:var(--ink);}
+  .field input:focus{outline:none; border-color:var(--accent);}
+  .emoji-pick{display:flex; flex-wrap:wrap; gap:6px;}
+  .emoji-pick button{font-size:24px; width:42px; height:42px; border-radius:12px; background:#f6f3ff; border:2px solid transparent;}
+  .emoji-pick button.sel{border-color:var(--accent); background:#efeaff;}
+  .color-pick{display:flex; gap:8px; flex-wrap:wrap;}
+  .color-pick button{width:34px; height:34px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 0 2px #eee;}
+  .color-pick button.sel{box-shadow:0 0 0 3px var(--accent);}
+  .seg{display:flex; gap:8px;}
+  .seg button{flex:1; padding:12px; border-radius:14px; background:#f4f1ff; font-weight:800; font-size:14px; color:var(--ink); border:2px solid transparent;}
+  .seg button.sel.pos{border-color:var(--good); background:#eafff5; color:#0d9b6c;}
+  .seg button.sel.neg{border-color:var(--bad); background:#fff3e0; color:var(--bad2);}
+  .pts-pick{display:flex; gap:8px;}
+  .pts-pick button{flex:1; padding:12px; border-radius:14px; background:#f4f1ff; font-weight:900; font-size:16px; color:var(--ink); border:2px solid transparent;}
+  .pts-pick button.sel{border-color:var(--accent); background:#efeaff;}
+  .btn{display:block; width:100%; padding:14px; border-radius:16px; font-size:16px; font-weight:800; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; margin-top:8px;}
+  .btn.ghost{background:#f3f0ff; color:var(--accent);}
+  .btn.danger{background:#fff0f3; color:#e5557e;}
+  .editlist{display:flex; flex-direction:column; gap:8px; margin:10px 0;}
+  .editrow{display:flex; align-items:center; gap:10px; background:#f8f6ff; border-radius:14px; padding:8px 10px;}
+  .editrow.neg{background:#fff6ec;}
+  .editrow .e{font-size:24px;}
+  .editrow .n{flex:1; font-weight:800;}
+  .editrow .tag{font-size:11px; font-weight:800; border-radius:999px; padding:2px 8px;}
+  .editrow .tag.pos{background:#eafff5; color:#0d9b6c;}
+  .editrow .tag.neg{background:#fff3e0; color:var(--bad2);}
+  .editrow button{font-size:18px; padding:6px 10px; border-radius:10px; background:#fff;}
+  .pin{letter-spacing:.3em; text-align:center; font-size:24px !important;}
+  .hidden{display:none !important;}
+
+  #confetti{position:fixed; inset:0; pointer-events:none; z-index:60;}
+
+  .empty{text-align:center; color:var(--muted); font-weight:700; padding:24px 10px;}
+  .toast{
+    position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#fff; padding:12px 20px; border-radius:999px; font-weight:800; font-size:14px;
+    opacity:0; transition:.3s; z-index:70; pointer-events:none; box-shadow:var(--shadow); max-width:90%; text-align:center;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+  <div class="brandbar">
+    <span>⭐ Mis Estrellas</span>
+    <span class="sp"></span>
+  </div>
+
+  <div class="hero">
+    <div class="level" id="level">
+      <div class="badge" id="lvlBadge">🌱</div>
+      <div class="lvl" id="lvlName">Nivel 1</div>
+    </div>
+    <div class="date" id="todayDate"></div>
+    <h1 id="greeting">¡Hola! 👋</h1>
+    <div class="stats">
+      <div class="stat">⭐ <b id="totalStars">0</b> estrellas</div>
+      <div class="stat">🔥 <b id="streak">0</b> días buenos</div>
+    </div>
+
+    <div class="dayscore">
+      <div class="face" id="dsFace">🙂</div>
+      <div class="col">
+        <div class="num" id="dsNum">0</div>
+        <div class="lab" id="dsLab">puntos de hoy</div>
+      </div>
+    </div>
+
+    <div class="progress"><span id="progBar"></span></div>
+    <div class="pct" id="progText">0 de 0 hechos hoy</div>
+  </div>
+
+  <div class="sec-title">
+    <h2>Mis tareas de hoy ✨</h2>
+    <span class="hint">Toca cuando lo hagas</span>
+  </div>
+  <div class="habits" id="habits"></div>
+
+  <div id="negSection">
+    <div class="sec-title">
+      <h2>Cosas a mejorar 💪</h2>
+      <span class="hint">Toca si pasa</span>
+    </div>
+    <div class="habits" id="negHabits"></div>
+  </div>
+
+  <div class="sec-title">
+    <h2>Mi semana 📅</h2>
+  </div>
+  <div class="week" id="week"></div>
+
+  <div class="sec-title">
+    <h2>Mi gráfico 📊</h2>
+    <span class="hint">Últimos 14 días</span>
+  </div>
+  <div class="chartcard">
+    <div id="chart"></div>
+    <div class="chart-legend">
+      <span><i style="background:var(--good)"></i> Día bueno</span>
+      <span><i style="background:var(--bad2)"></i> A mejorar</span>
+    </div>
+  </div>
+
+  <div class="sec-title">
+    <h2>Premio de la semana 🏆</h2>
+    <span class="hint">Lun a Dom</span>
+  </div>
+  <div class="reward" id="weekPrize"></div>
+
+  <div class="sec-title">
+    <h2>Mi nivel 🎁</h2>
+  </div>
+  <div class="reward" id="reward"></div>
+
+  <div class="dock" id="dock"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="sheet" id="sheet"></div>
+  </div>
+
+  <canvas id="confetti"></canvas>
+  <div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   Mis Estrellas — Tracker de hábitos para peques
+   Hábitos buenos (suman) y a mejorar (restan).
+   Datos en localStorage. 100% sin servidor.
+   ========================================================= */
+
+const STORAGE_KEY = "misEstrellas.v2";
+const COLORS = ["#7c5cff","#ff7ab8","#34d399","#ffb23c","#4cc9f0","#f4709a","#a06cf0","#ff8a5c"];
+const EMOJI_KID = ["👧","👦","🧒","👶","🐱","🐶","🦄","🐼","🦊","🐢","🐰","🐯","🌟","🚀","🦋","🐙"];
+const EMOJI_GOOD = ["🛏️","🍳","🧽","🧸","📚","🦷","🚿","🥗","💧","🧹","👕","🎒","🐾","🌳","✍️","🎨","🧩","⚽","🎹","🙏","🧘","💤","🪥","🧴","🍎","🥦","🧦","🗑️"];
+const EMOJI_BAD  = ["😤","😭","😠","🙊","😖","🛑","📱","🍬","😢","🙅","💢","🗯️","😾","🫠","🙄","😫","⏰","🤥"];
+
+/* Hábitos de verano por defecto */
+const DEFAULT_GOOD = [
+  {emoji:"🛏️", name:"Hacer la cama"},
+  {emoji:"🍳", name:"Desayunar"},
+  {emoji:"🧽", name:"Recoger el desayuno"},
+  {emoji:"🪥", name:"Lavarse los dientes"},
+  {emoji:"🧸", name:"Recoger la habitación"},
+  {emoji:"📚", name:"Rato de lectura"},
+  {emoji:"🚿", name:"Ducharse"},
+  {emoji:"💧", name:"Beber agua"},
+];
+const DEFAULT_BAD = [
+  {emoji:"😖", name:"Hacer manías", points:1},
+  {emoji:"😭", name:"Tener dramas", points:2},
+  {emoji:"😠", name:"Contestar mal", points:1},
+];
+
+const LEVELS = [
+  {min:0,    badge:"🌱", name:"Semillita"},
+  {min:15,   badge:"🌸", name:"Florecita"},
+  {min:40,   badge:"⭐", name:"Estrella"},
+  {min:80,   badge:"🌟", name:"Súper estrella"},
+  {min:140,  badge:"🏅", name:"Campeona"},
+  {min:220,  badge:"👑", name:"Reina"},
+  {min:320,  badge:"🦄", name:"Mágica"},
+];
+
+let state = load();
+
+/* ---------- Persistencia ---------- */
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){ return migrate(JSON.parse(raw)); }
+    // intentar migrar desde v1
+    const old = localStorage.getItem("misEstrellas.v1");
+    if(old){ return migrate(JSON.parse(old)); }
+  }catch(e){}
+  return {
+    activeKidId: "valeria",
+    pin: "",
+    kids: [
+      makeKid("valeria","Valeria","👧","#ff7ab8"),
+      makeKid("mateo","Mateo","👦","#4cc9f0"),
+    ]
+  };
+}
+function migrate(s){
+  // asegura type/points en cada hábito (compatibilidad v1)
+  (s.kids||[]).forEach(k=>{
+    (k.habits||[]).forEach(h=>{
+      if(!h.type) h.type = "good";
+      if(h.points==null) h.points = 1;
+    });
+    if(!k.weekGoal) k.weekGoal = { mode:"stars", stars:25, days:5, minPerDay:3, prize:"Una sorpresa 🎁" };
+    if(!k.weekGoal.mode) k.weekGoal.mode = "stars";
+    if(k.weekGoal.days==null) k.weekGoal.days = 5;
+    if(k.weekGoal.minPerDay==null) k.weekGoal.minPerDay = 3;
+    if(k.weekGoal.stars==null) k.weekGoal.stars = 25;
+    if(k.weekWon==null) k.weekWon = "";
+  });
+  return s;
+}
+function saveLocal(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
+function save(){
+  state.updatedAt = Date.now();
+  saveLocal();
+  schedulePush(); // sube a la nube si hay sincronización activa
+}
+
+/* =========================================================
+   SINCRONIZACIÓN con JSONBin.io  (un "código" entre dispositivos)
+   ========================================================= */
+const SYNC_KEY = "misEstrellas.sync.v1";
+const JB = "https://api.jsonbin.io/v3";
+let sync = loadSync();      // { key, binId } o null
+let pushTimer = null;
+
+function loadSync(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY)) || null; }catch(e){ return null; } }
+function saveSync(){ if(sync) localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); else localStorage.removeItem(SYNC_KEY); }
+const syncOn = ()=> !!(sync && sync.key && sync.binId);
+
+/* --- llamadas a JSONBin --- */
+async function jbCreate(key, data){
+  const r = await fetch(JB+"/b", { method:"POST",
+    headers:{ "Content-Type":"application/json", "X-Master-Key":key, "X-Bin-Private":"true", "X-Bin-Name":"mis-estrellas" },
+    body: JSON.stringify(data) });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return (await r.json()).metadata.id;
+}
+async function jbRead(key, binId){
+  const r = await fetch(JB+"/b/"+binId+"/latest", { headers:{ "X-Master-Key":key } });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return (await r.json()).record;
+}
+async function jbUpdate(key, binId, data){
+  const r = await fetch(JB+"/b/"+binId, { method:"PUT",
+    headers:{ "Content-Type":"application/json", "X-Master-Key":key }, body: JSON.stringify(data) });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return true;
+}
+
+/* --- push / pull --- */
+function schedulePush(){
+  if(!syncOn()) return;
+  setSyncUI("saving");
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(doPush, 800); // debounce: agrupa cambios seguidos
+}
+async function doPush(){
+  if(!syncOn()) return;
+  try{ await jbUpdate(sync.key, sync.binId, state); setSyncUI("ok"); }
+  catch(e){ setSyncUI("error"); console.warn("push:", e.message); }
+}
+async function doPull(){
+  if(!syncOn()) return;
+  try{
+    const cloud = await jbRead(sync.key, sync.binId);
+    if(cloud && Array.isArray(cloud.kids) && (cloud.updatedAt||0) > (state.updatedAt||0)){
+      applyCloud(cloud);
+    }
+    setSyncUI("ok");
+  }catch(e){ setSyncUI("error"); console.warn("pull:", e.message); }
+}
+function applyCloud(s){
+  state = migrate(s);
+  if(!state.activeKidId || !state.kids.find(k=>k.id===state.activeKidId)) state.activeKidId = state.kids[0]?.id;
+  saveLocal(); render();
+}
+
+/* --- código de sincronización (lleva clave + binId) --- */
+function makeCode(){ return btoa(unescape(encodeURIComponent(JSON.stringify({k:sync.key, b:sync.binId})))); }
+function parseCode(code){ const o=JSON.parse(decodeURIComponent(escape(atob(code.trim())))); return { key:o.k, binId:o.b }; }
+
+/* --- UI de estado (icono de nube en el dock) --- */
+let syncStatus = "idle";
+function syncTileInner(){
+  if(!syncOn()) return `<span class="ic">☁️</span><span class="lb">Nube</span>`;
+  let ic="☁️", lb="Nube";
+  if(syncStatus==="saving"){ ic="⏳"; lb="Guardando"; }
+  else if(syncStatus==="error"){ ic="⚠️"; lb="Sin conexión"; }
+  return `<span class="ic">${ic}</span><span class="lb">${lb}</span>`;
+}
+function setSyncUI(status){
+  if(status) syncStatus = status;
+  const t = document.getElementById("dockSync");
+  if(!t) return;
+  t.className = "dockitem action sync" + (syncOn() ? (syncStatus==="saving"?" saving":syncStatus==="error"?" err":" on") : "");
+  t.innerHTML = syncTileInner();
+}
+
+/* --- pantalla de sincronización --- */
+function openSyncSettings(){
+  const open = ()=>{
+    const on = syncOn();
+    openSheet(`
+      <h2>☁️ Sincronizar entre dispositivos</h2>
+      <div class="sub">Comparte los datos de todos los dispositivos con un único <b>código</b>.</div>
+      ${ on ? `
+        <div class="field">
+          <label>Estado</label>
+          <div class="editrow"><span class="n">✅ Sincronización activada</span></div>
+        </div>
+        <div class="field">
+          <label>Tu código (pégalo en tus otros dispositivos)</label>
+          <input type="text" id="syncCode" readonly onclick="this.select()" value="${makeCode()}">
+          <button class="btn ghost" onclick="copyCode()">📋 Copiar código</button>
+        </div>
+        <button class="btn ghost" onclick="forcePull()">⬇️ Traer datos de la nube ahora</button>
+        <button class="btn danger" onclick="disconnectSync()">Desconectar este dispositivo</button>
+      ` : `
+        <div class="field">
+          <label>Dispositivo principal</label>
+          <input type="text" id="jbKey" placeholder="Pega tu Master Key de jsonbin.io">
+          <button class="btn" onclick="activateSync()">Activar y crear mi nube</button>
+        </div>
+        <div class="field">
+          <label>Otro dispositivo (ya tengo un código)</label>
+          <input type="text" id="joinCode" placeholder="Pega aquí el código">
+          <button class="btn ghost" onclick="joinSync()">Conectar con el código</button>
+        </div>
+        <p class="sub">La clave se saca una sola vez en <b>jsonbin.io → API KEYS → Master Key</b> (cuenta gratuita).</p>
+      `}
+      <button class="btn ghost" onclick="closeSheet()">Cerrar</button>`);
+  };
+  if(state.pin) askPin(open); else open();
+}
+async function activateSync(){
+  const key = document.getElementById("jbKey").value.trim();
+  if(!key){ toast("Pega tu clave de JSONBin 🔑"); return; }
+  toast("Creando tu nube…");
+  try{
+    state.updatedAt = Date.now();
+    const binId = await jbCreate(key, state);
+    sync = { key, binId }; saveSync();
+    setSyncUI("ok"); render();
+    openSyncSettings(); // muestra el código para compartir
+    toast("✅ Sincronización activada");
+  }catch(e){ toast("No se pudo activar (clave correcta?) — "+e.message); }
+}
+async function joinSync(){
+  const code = document.getElementById("joinCode").value.trim();
+  if(!code){ toast("Pega el código 🙂"); return; }
+  let cfg; try{ cfg = parseCode(code); }catch(e){ toast("Código no válido 😕"); return; }
+  if(!cfg.key || !cfg.binId){ toast("Código no válido 😕"); return; }
+  toast("Conectando…");
+  try{
+    const cloud = await jbRead(cfg.key, cfg.binId);
+    sync = cfg; saveSync();
+    if(cloud && Array.isArray(cloud.kids)) applyCloud(cloud);
+    setSyncUI("ok"); closeSheet();
+    toast("✅ Conectado y sincronizado");
+  }catch(e){ toast("No se pudo conectar — "+e.message); }
+}
+function copyCode(){
+  const t = document.getElementById("syncCode"); if(!t) return;
+  const done = ()=>toast("Código copiado 📋");
+  if(navigator.clipboard){ navigator.clipboard.writeText(t.value).then(done, ()=>{ t.select(); document.execCommand("copy"); done(); }); }
+  else { t.select(); document.execCommand("copy"); done(); }
+}
+async function forcePull(){ await doPull(); toast("Datos traídos de la nube ⬇️"); }
+function disconnectSync(){
+  if(!confirm("¿Dejar de sincronizar en este dispositivo? Los datos locales se conservan.")) return;
+  sync = null; saveSync(); setSyncUI(); closeSheet(); toast("Sincronización desconectada");
+}
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function makeKid(id,name,emoji,color){
+  return {
+    id: id||uid(), name, emoji, color,
+    habits: [
+      ...DEFAULT_GOOD.map(h=>({id:uid(), type:"good", points:1, ...h})),
+      ...DEFAULT_BAD.map(h=>({id:uid(), type:"bad", points:1, ...h})),
+    ],
+    weekGoal: { mode:"stars", stars: 25, days: 5, minPerDay: 3, prize: "Una sorpresa 🎁" },
+    weekWon: "", // weekKey ya celebrado
+    log: {} // { "YYYY-MM-DD": { habitId: true | <conteo> } }
+  };
+}
+function activeKid(){ return state.kids.find(k=>k.id===state.activeKidId) || state.kids[0]; }
+const goodHabits = k => k.habits.filter(h=>h.type!=="bad");
+const badHabits  = k => k.habits.filter(h=>h.type==="bad");
+
+/* ---------- Fechas ---------- */
+function ymd(d){ const x=new Date(d); return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); }
+const TODAY = ymd(new Date());
+function prettyDate(){ return new Date().toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long"}); }
+
+/* ---------- Puntuaciones ---------- */
+function dayScore(kid, day){
+  const rec = kid.log[day]||{};
+  let s=0;
+  kid.habits.forEach(h=>{
+    const v = rec[h.id];
+    if(!v) return;
+    if(h.type==="bad") s -= (Number(v)||1) * (h.points||1);
+    else s += (h.points||1);
+  });
+  return s;
+}
+function maxGoodGoal(kid){ return goodHabits(kid).reduce((s,h)=>s+(h.points||1),0); }
+function totalScore(kid){ let s=0; for(const d in kid.log) s+=dayScore(kid,d); return s; }
+function goodDaysStreak(kid){
+  let streak=0, d=new Date();
+  if(dayScore(kid, ymd(d))<=0 && Object.keys(kid.log[ymd(d)]||{}).length===0) d.setDate(d.getDate()-1);
+  while(dayScore(kid, ymd(d))>0){ streak++; d.setDate(d.getDate()-1); }
+  return streak;
+}
+function weekDates(ref){
+  // lunes a domingo de la semana de 'ref' (hoy por defecto)
+  const base = ref ? new Date(ref) : new Date();
+  const dow = (base.getDay()+6)%7; // 0 = lunes
+  const mon = new Date(base); mon.setDate(base.getDate()-dow);
+  const days=[]; for(let i=0;i<7;i++){ const d=new Date(mon); d.setDate(mon.getDate()+i); days.push(ymd(d)); }
+  return days;
+}
+function weekKey(){ return weekDates()[0]; }
+function weekScore(kid){ return weekDates().reduce((s,k)=>s+dayScore(kid,k),0); }
+function weekGoodDays(kid, min){ return weekDates().reduce((n,k)=> n + (dayScore(kid,k) >= Math.max(1,min) ? 1 : 0), 0); }
+function levelFor(stars){
+  let lvl=LEVELS[0], idx=0;
+  LEVELS.forEach((l,i)=>{ if(stars>=l.min){ lvl=l; idx=i; } });
+  return {lvl, idx, next: LEVELS[idx+1]||null};
+}
+function faceFor(kid, score){
+  const max = maxGoodGoal(kid) || 1;
+  const r = score/max;
+  if(score<0)      return {face:"😟", lab:"hoy a mejorar", col:"var(--bad2)"};
+  if(score===0)    return {face:"😐", lab:"¡ánimo, empieza!", col:"#fff"};
+  if(r>=0.85)      return {face:"🤩", lab:"¡día genial!", col:"#fff"};
+  if(r>=0.55)      return {face:"😄", lab:"¡muy bien!", col:"#fff"};
+  return                  {face:"🙂", lab:"¡vas bien!", col:"#fff"};
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const kid = activeKid();
+  renderDock();
+
+  document.documentElement.style.setProperty("--accent", kid.color);
+  document.getElementById("todayDate").textContent = prettyDate();
+  document.getElementById("greeting").textContent = `¡Hola, ${kid.name}! ${kid.emoji}`;
+
+  const total = totalScore(kid);
+  document.getElementById("totalStars").textContent = total;
+  document.getElementById("streak").textContent = goodDaysStreak(kid);
+
+  const {lvl, next} = levelFor(Math.max(0,total));
+  document.getElementById("lvlBadge").textContent = lvl.badge;
+  document.getElementById("lvlName").textContent = lvl.name;
+
+  // puntuación del día
+  const score = dayScore(kid, TODAY);
+  const f = faceFor(kid, score);
+  document.getElementById("dsFace").textContent = f.face;
+  document.getElementById("dsNum").textContent = (score>0?"+":"") + score;
+  document.getElementById("dsNum").style.color = f.col;
+  document.getElementById("dsLab").textContent = f.lab;
+
+  // progreso de tareas buenas
+  const todayRec = kid.log[TODAY]||{};
+  const goods = goodHabits(kid);
+  const done = goods.filter(h=>todayRec[h.id]).length;
+  const pct = goods.length? Math.round(done/goods.length*100):0;
+  document.getElementById("progBar").style.width = pct+"%";
+  document.getElementById("progText").textContent =
+    goods.length ? `${done} de ${goods.length} tareas hechas` + (done===goods.length ? " — ¡todas! 🎉" : "")
+                 : "Añade tareas en Ajustes ⚙️";
+
+  renderHabits(kid, todayRec);
+  renderNeg(kid, todayRec);
+  renderWeek(kid);
+  renderChart(kid);
+  renderWeekPrize(kid);
+  renderReward(kid, Math.max(0,total), lvl, next);
+}
+
+function renderWeekPrize(kid){
+  const wrap = document.getElementById("weekPrize");
+  const goal = kid.weekGoal || {mode:"stars", stars:25, days:5, minPerDay:3, prize:""};
+
+  let have, target, progressTxt, unit;
+  if(goal.mode==="days"){
+    target = Math.max(1, goal.days||1);
+    have = weekGoodDays(kid, goal.minPerDay||1);
+    const min = goal.minPerDay||1;
+    const minTxt = min<=1 ? "con estrella" : `de ${min}⭐ o más`;
+    progressTxt = `Llevas <b>${have}</b> de <b>${target}</b> días ${minTxt} — faltan <b>${Math.max(0,target-have)}</b>`;
+  }else{
+    target = Math.max(1, goal.stars||1);
+    have = Math.max(0, weekScore(kid));
+    progressTxt = `Llevas <b>${have}</b> de <b>${target}</b> ⭐ — te faltan <b>${Math.max(0,target-have)}</b>`;
+  }
+  const pct = Math.min(100, Math.round(have/target*100));
+  const won = have>=target;
+
+  // celebrar una sola vez al conseguirlo
+  if(won && kid.weekWon!==weekKey()){
+    kid.weekWon = weekKey(); save();
+    setTimeout(()=>{ celebrate(); fanfare(); toast(`🏆 ¡Premio conseguido: ${goal.prize||"sorpresa"}!`); }, 300);
+  }
+
+  wrap.className = "reward" + (won?" won":"");
+  wrap.innerHTML = `
+    <div class="row">
+      <div class="big">${won?"🎉":"🏆"}</div>
+      <div class="txt">
+        <b>${goal.prize ? goal.prize : "Premio de la semana"}</b>
+        <p>${won ? "¡Conseguido! 🌈 ¡Te lo has ganado!" : progressTxt}</p>
+      </div>
+    </div>
+    <div class="bar"><span style="width:${pct}%"></span></div>
+    <button class="editp" onclick="openWeekGoalEditor()">✏️ Cambiar premio u objetivo</button>`;
+}
+
+let _wgMode = "stars";
+function openWeekGoalEditor(){
+  const open = ()=>{
+    const kid=activeKid(); const g=kid.weekGoal||{mode:"stars",stars:25,days:5,minPerDay:3,prize:""};
+    _wgMode = g.mode || "stars";
+    openSheet(`
+      <h2>🏆 Objetivo de la semana</h2>
+      <div class="sub">Elige el reto de <b>${kid.name}</b> (lunes a domingo) y qué gana al lograrlo</div>
+
+      <div class="field">
+        <label>Premio</label>
+        <input type="text" id="wgPrize" placeholder="Ej: Peli el viernes 🍿" value="${(g.prize||'').replace(/"/g,'&quot;')}">
+      </div>
+
+      <div class="field">
+        <label>Tipo de objetivo</label>
+        <div class="seg" id="wgModeSeg">
+          <button data-m="stars">⭐ Estrellas totales</button>
+          <button data-m="days">📅 Días buenos</button>
+        </div>
+      </div>
+
+      <div class="field" id="wgStarsField">
+        <label>Estrellas necesarias esta semana</label>
+        <input type="text" id="wgStars" inputmode="numeric" value="${g.stars||25}">
+      </div>
+
+      <div class="field" id="wgDaysField">
+        <label>Días buenos que tiene que conseguir</label>
+        <input type="text" id="wgDays" inputmode="numeric" value="${g.days||5}">
+        <label style="margin-top:10px">Mínimo de estrellas para que un día cuente</label>
+        <input type="text" id="wgMin" inputmode="numeric" value="${g.minPerDay||3}">
+      </div>
+
+      <button class="btn" onclick="saveWeekGoal()">Guardar</button>
+      <button class="btn ghost" onclick="closeSheet()">Cancelar</button>`);
+    drawWgMode();
+    document.getElementById("wgPrize").focus();
+  };
+  if(state.pin) askPin(open); else open();
+}
+function drawWgMode(){
+  const seg=document.getElementById("wgModeSeg");
+  [...seg.children].forEach(b=>{
+    b.className=""; if(b.dataset.m===_wgMode) b.classList.add("sel","pos");
+    b.onclick=()=>{ _wgMode=b.dataset.m; drawWgMode(); };
+  });
+  document.getElementById("wgStarsField").style.display = _wgMode==="stars"?"":"none";
+  document.getElementById("wgDaysField").style.display  = _wgMode==="days"?"":"none";
+}
+function saveWeekGoal(){
+  const kid=activeKid();
+  const prize=document.getElementById("wgPrize").value.trim();
+  const g={ mode:_wgMode, prize };
+  if(_wgMode==="days"){
+    const days=parseInt(document.getElementById("wgDays").value,10);
+    const minPerDay=parseInt(document.getElementById("wgMin").value,10);
+    if(!days||days<1||days>7){ toast("Pon entre 1 y 7 días 🙂"); return; }
+    g.days=days; g.minPerDay=Math.max(1, minPerDay||1);
+    g.stars=kid.weekGoal?.stars||25;
+  }else{
+    const stars=parseInt(document.getElementById("wgStars").value,10);
+    if(!stars||stars<1){ toast("Pon un número de estrellas 🙂"); return; }
+    g.stars=stars;
+    g.days=kid.weekGoal?.days||5; g.minPerDay=kid.weekGoal?.minPerDay||3;
+  }
+  kid.weekGoal=g; kid.weekWon="";
+  save(); closeSheet(); render(); toast("Objetivo actualizado 🏆");
+}
+
+function switchKid(id){ state.activeKidId=id; save(); render(); }
+
+function renderDock(){
+  const dock = document.getElementById("dock");
+  if(!dock) return;
+  // niños
+  let html = state.kids.map(k=>{
+    const active = k.id===state.activeKidId;
+    return `<button class="dockitem kid${active?' active':''}" onclick="switchKid('${k.id}')">
+      <span class="ic" style="background:${k.color}26">${k.emoji}</span>
+      <span class="lb">${k.name}</span></button>`;
+  }).join("");
+  html += `<button class="dockitem kid add" onclick="openKidEditor(null)">
+      <span class="ic">+</span><span class="lb">Añadir</span></button>`;
+  // separador + acciones
+  html += `<div class="sep"></div>`;
+  html += `<button class="dockitem action sync" id="dockSync" onclick="openSyncSettings()">${syncTileInner()}</button>`;
+  html += `<button class="dockitem action" onclick="openSettings()"><span class="ic">⚙️</span><span class="lb">Ajustes</span></button>`;
+  dock.innerHTML = html;
+  setSyncUI(); // aplica el estado/color actual al icono de la nube
+}
+
+function renderHabits(kid, todayRec){
+  const wrap = document.getElementById("habits");
+  wrap.innerHTML = "";
+  const goods = goodHabits(kid);
+  if(!goods.length){
+    wrap.innerHTML = `<div class="empty" style="grid-column:1/-1">Aún no hay tareas.<br>Toca ⚙️ Ajustes para añadirlas.</div>`;
+    return;
+  }
+  goods.forEach(h=>{
+    const done = !!todayRec[h.id];
+    const el = document.createElement("button");
+    el.className = "habit" + (done?" done":"");
+    const ptsTag = (h.points||1)>1 ? `<span class="pts">+${h.points}</span>` : "";
+    el.innerHTML = `${ptsTag}<span class="star">⭐</span><span class="emoji">${h.emoji}</span><span class="name">${h.name}</span>`;
+    el.onclick = (ev)=> toggleGood(h.id, ev);
+    wrap.appendChild(el);
+  });
+}
+
+function renderNeg(kid, todayRec){
+  const sec = document.getElementById("negSection");
+  const wrap = document.getElementById("negHabits");
+  const bads = badHabits(kid);
+  if(!bads.length){ sec.classList.add("hidden"); return; }
+  sec.classList.remove("hidden");
+  wrap.innerHTML = "";
+  bads.forEach(h=>{
+    const count = Number(todayRec[h.id]||0);
+    const el = document.createElement("button");
+    el.className = "habit neg" + (count>0?" hit":"");
+    el.innerHTML = `
+      <span class="pts">-${h.points||1}</span>
+      <span class="count">×${count}</span>
+      <span class="emoji">${h.emoji}</span>
+      <span class="name">${h.name}</span>
+      <span class="minus" title="Quitar uno">−</span>`;
+    el.onclick = (ev)=>{
+      if(ev.target.classList.contains("minus")){ ev.stopPropagation(); decBad(h.id); }
+      else incBad(h.id, ev);
+    };
+    wrap.appendChild(el);
+  });
+}
+
+function renderWeek(kid){
+  const wrap = document.getElementById("week");
+  wrap.innerHTML = "";
+  const names = ["D","L","M","X","J","V","S"];
+  const today = new Date();
+  for(let i=6;i>=0;i--){
+    const d = new Date(); d.setDate(today.getDate()-i);
+    const key = ymd(d);
+    const s = dayScore(kid, key);
+    const cls = s>0?"pos":(s<0?"neg":"zero");
+    const el = document.createElement("div");
+    el.className = "day "+cls + (key===TODAY?" today":"");
+    const ring = s===0 ? "·" : (s>0?"+"+s:s);
+    el.innerHTML = `<div class="dn">${names[d.getDay()]}</div><div class="dd">${d.getDate()}</div><div class="ring">${ring}</div>`;
+    wrap.appendChild(el);
+  }
+}
+
+/* ---------- Gráfico SVG de 14 días ---------- */
+function renderChart(kid){
+  const N=14, today=new Date(), data=[];
+  for(let i=N-1;i>=0;i--){ const d=new Date(); d.setDate(today.getDate()-i); data.push({d, key:ymd(d), s:dayScore(kid, ymd(d))}); }
+  const maxAbs = Math.max(3, ...data.map(x=>Math.abs(x.s)));
+  const W=560, H=170, padB=22, padT=10;
+  const mid = padT + (H-padT-padB)/2;
+  const half = (H-padT-padB)/2;
+  const step = W/N, bw = step*0.56;
+  let bars="", labels="";
+  data.forEach((x,i)=>{
+    const cx = i*step + step/2;
+    const h = Math.abs(x.s)/maxAbs * (half-4);
+    const col = x.s>0 ? "var(--good)" : (x.s<0 ? "var(--bad2)" : "#dcd6f0");
+    if(x.s===0){
+      bars += `<circle cx="${cx}" cy="${mid}" r="3" fill="#dcd6f0"/>`;
+    }else{
+      const y = x.s>0 ? mid-h : mid;
+      bars += `<rect x="${cx-bw/2}" y="${y}" width="${bw}" height="${Math.max(2,h)}" rx="4" fill="${col}">
+        <title>${x.d.toLocaleDateString("es-ES",{weekday:"short",day:"numeric"})}: ${x.s>0?"+":""}${x.s}</title></rect>`;
+    }
+    const isToday = x.key===TODAY;
+    labels += `<text x="${cx}" y="${H-7}" text-anchor="middle" font-size="11" font-weight="${isToday?800:600}" fill="${isToday?'var(--accent)':'#b3a9cf'}">${x.d.getDate()}</text>`;
+  });
+  const zeroLine = `<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="#ece7f7" stroke-width="2"/>`;
+  document.getElementById("chart").innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${zeroLine}${bars}${labels}</svg>`;
+}
+
+function renderReward(kid, stars, lvl, next){
+  const wrap = document.getElementById("reward");
+  if(!next){
+    wrap.innerHTML = `<div class="row"><div class="big">${lvl.badge}</div><div class="txt"><b>¡Nivel máximo! ${lvl.name}</b><p>¡Eres increíble! Sigue así 🌈</p></div></div>`;
+    return;
+  }
+  const have=stars-lvl.min, need=next.min-lvl.min;
+  const pct=Math.min(100, Math.round(have/need*100));
+  const falta=next.min-stars;
+  wrap.innerHTML = `
+    <div class="row">
+      <div class="big">${next.badge}</div>
+      <div class="txt">
+        <b>Próximo nivel: ${next.name}</b>
+        <p>Te faltan <b>${falta}</b> ⭐ para subir de nivel</p>
+      </div>
+    </div>
+    <div class="bar"><span style="width:${pct}%"></span></div>`;
+}
+
+/* ---------- Acciones ---------- */
+function toggleGood(habitId, ev){
+  const kid = activeKid();
+  if(!kid.log[TODAY]) kid.log[TODAY]={};
+  const was = !!kid.log[TODAY][habitId];
+  if(was) delete kid.log[TODAY][habitId];
+  else { kid.log[TODAY][habitId]=true; pop(ev); ding(); }
+  save(); render();
+
+  const rec = kid.log[TODAY]||{};
+  const goods = goodHabits(kid);
+  const done = goods.filter(h=>rec[h.id]).length;
+  if(!was && done===goods.length && goods.length>0){
+    setTimeout(()=>{ celebrate(); toast("¡Todas las tareas hechas! 🎉 ¡Campeón/a!"); fanfare(); },250);
+  }
+}
+function incBad(habitId, ev){
+  const kid = activeKid();
+  if(!kid.log[TODAY]) kid.log[TODAY]={};
+  kid.log[TODAY][habitId] = Number(kid.log[TODAY][habitId]||0)+1;
+  puff(ev); thud();
+  save(); render();
+}
+function decBad(habitId){
+  const kid = activeKid();
+  if(!kid.log[TODAY]) return;
+  const v = Number(kid.log[TODAY][habitId]||0);
+  if(v<=1) delete kid.log[TODAY][habitId];
+  else kid.log[TODAY][habitId]=v-1;
+  save(); render();
+}
+
+/* ---------- Sonido (WebAudio) ---------- */
+let actx;
+function audio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function tone(freq,start,dur,vol=0.15,type="sine"){
+  const a=audio(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type; o.frequency.value=freq; o.connect(g); g.connect(a.destination);
+  const t=a.currentTime+start;
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t); o.stop(t+dur);
+}
+function ding(){ tone(880,0,0.18); tone(1320,0.05,0.2); }
+function fanfare(){ [523,659,784,1047].forEach((f,i)=>tone(f,i*0.12,0.3,0.18)); }
+function thud(){ tone(320,0,0.18,0.12,"triangle"); tone(220,0.06,0.22,0.12,"triangle"); }
+
+/* ---------- Animaciones ---------- */
+function flyEmojis(ev, set, up){
+  if(!ev) return;
+  const x=ev.clientX, y=ev.clientY;
+  for(let i=0;i<7;i++){
+    const s=document.createElement("div");
+    s.textContent=set[i%set.length];
+    s.style.cssText=`position:fixed; left:${x}px; top:${y}px; font-size:${14+Math.random()*14}px; pointer-events:none; z-index:80; transition:transform .7s ease-out, opacity .7s;`;
+    document.body.appendChild(s);
+    const ang=Math.random()*Math.PI*2, dist=30+Math.random()*60;
+    requestAnimationFrame(()=>{
+      s.style.transform=`translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist + (up?-30:20)}px) scale(${0.5+Math.random()})`;
+      s.style.opacity="0";
+    });
+    setTimeout(()=>s.remove(),750);
+  }
+}
+function pop(ev){ flyEmojis(ev, ["⭐","✨","🌟"], true); }
+function puff(ev){ flyEmojis(ev, ["💨","😕","💢"], false); }
+
+function celebrate(){
+  const cv=document.getElementById("confetti"), ctx=cv.getContext("2d");
+  cv.width=innerWidth; cv.height=innerHeight;
+  const colors=["#7c5cff","#ff7ab8","#34d399","#ffc23c","#4cc9f0"];
+  const parts=Array.from({length:140},()=>({x:Math.random()*cv.width, y:-20-Math.random()*cv.height*0.4, r:5+Math.random()*8, c:colors[Math.floor(Math.random()*colors.length)], vy:2+Math.random()*4, vx:-2+Math.random()*4, rot:Math.random()*6, vr:-.2+Math.random()*.4}));
+  let frames=0;
+  (function loop(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c; ctx.fillRect(-p.r/2,-p.r/2,p.r,p.r*0.6); ctx.restore(); });
+    frames++;
+    if(frames<160) requestAnimationFrame(loop); else ctx.clearRect(0,0,cv.width,cv.height);
+  })();
+}
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2600);
+}
+
+/* =========================================================
+   AJUSTES (modo papás)
+   ========================================================= */
+function openSettings(){ if(state.pin) askPin(()=>showSettings()); else showSettings(); }
+function askPin(onok){
+  openSheet(`
+    <h2>🔒 Zona de papás</h2>
+    <div class="sub">Escribe el PIN para entrar</div>
+    <div class="field"><input class="pin" id="pinInput" type="tel" maxlength="4" inputmode="numeric" placeholder="••••"></div>
+    <button class="btn" id="pinOk">Entrar</button>
+    <button class="btn ghost" onclick="closeSheet()">Cancelar</button>`);
+  const inp=document.getElementById("pinInput"); inp.focus();
+  document.getElementById("pinOk").onclick=()=>{ if(inp.value===state.pin) onok(); else { inp.value=""; toast("PIN incorrecto 🙈"); } };
+}
+
+function showSettings(){
+  const kid=activeKid();
+  openSheet(`
+    <h2>⚙️ Ajustes</h2>
+    <div class="sub">Configura las tareas de <b>${kid.name}</b> y la app</div>
+
+    <div class="field">
+      <label>✨ Tareas buenas (suman)</label>
+      <div class="editlist" id="goodList"></div>
+      <button class="btn ghost" onclick="openHabitEditor(null,'good')">➕ Añadir tarea buena</button>
+    </div>
+
+    <div class="field">
+      <label>💪 Cosas a mejorar (restan)</label>
+      <div class="editlist" id="badList"></div>
+      <button class="btn ghost" onclick="openHabitEditor(null,'bad')">➕ Añadir cosa a mejorar</button>
+    </div>
+
+    <div class="field">
+      <label>🏆 Objetivo semanal de ${kid.name}</label>
+      <button class="btn ghost" onclick="openWeekGoalEditor()">Definir reto y premio de la semana</button>
+    </div>
+
+    <div class="field">
+      <label>Niños/as</label>
+      <div class="editlist" id="kidList"></div>
+      <button class="btn ghost" onclick="openKidEditor(null)">➕ Añadir niño/a</button>
+    </div>
+
+    <div class="field">
+      <label>Datos</label>
+      <button class="btn ghost" onclick="exportData()">📤 Exportar (descargar copia)</button>
+      <button class="btn ghost" onclick="document.getElementById('importFile').click()">📥 Importar copia</button>
+      <input type="file" id="importFile" accept="application/json" class="hidden" onchange="importData(event)">
+    </div>
+
+    <div class="field">
+      <label>PIN de papás (opcional)</label>
+      <input type="tel" id="pinSet" class="pin" maxlength="4" inputmode="numeric" placeholder="${state.pin?'••••':'sin PIN'}">
+      <button class="btn ghost" onclick="setPin()">Guardar PIN</button>
+    </div>
+
+    <button class="btn danger" onclick="resetKidToday()">↩️ Borrar el día de hoy de ${kid.name}</button>
+    <button class="btn" onclick="closeSheet()">Listo ✅</button>`);
+  renderEditLists();
+}
+
+function renderEditLists(){
+  const kid=activeKid();
+  const gl=document.getElementById("goodList");
+  if(gl){
+    gl.innerHTML="";
+    goodHabits(kid).forEach(h=>{
+      const row=document.createElement("div"); row.className="editrow";
+      row.innerHTML=`<span class="e">${h.emoji}</span><span class="n">${h.name}</span>
+        <span class="tag pos">+${h.points||1}</span>
+        <button onclick="openHabitEditor('${h.id}')">✏️</button>
+        <button onclick="deleteHabit('${h.id}')">🗑️</button>`;
+      gl.appendChild(row);
+    });
+    if(!goodHabits(kid).length) gl.innerHTML=`<div class="empty">Sin tareas todavía</div>`;
+  }
+  const bl=document.getElementById("badList");
+  if(bl){
+    bl.innerHTML="";
+    badHabits(kid).forEach(h=>{
+      const row=document.createElement("div"); row.className="editrow neg";
+      row.innerHTML=`<span class="e">${h.emoji}</span><span class="n">${h.name}</span>
+        <span class="tag neg">-${h.points||1}</span>
+        <button onclick="openHabitEditor('${h.id}')">✏️</button>
+        <button onclick="deleteHabit('${h.id}')">🗑️</button>`;
+      bl.appendChild(row);
+    });
+    if(!badHabits(kid).length) bl.innerHTML=`<div class="empty">Nada que mejorar 🎉</div>`;
+  }
+  const kl=document.getElementById("kidList");
+  if(kl){
+    kl.innerHTML="";
+    state.kids.forEach(k=>{
+      const row=document.createElement("div"); row.className="editrow";
+      row.innerHTML=`<span class="e">${k.emoji}</span><span class="n">${k.name}</span>
+        <button onclick="openKidEditor('${k.id}')">✏️</button>
+        ${state.kids.length>1?`<button onclick="deleteKid('${k.id}')">🗑️</button>`:''}`;
+      kl.appendChild(row);
+    });
+  }
+}
+
+/* ---------- Editor de tarea ---------- */
+let _emojiSel="📚", _editHabitId=null, _typeSel="good", _ptsSel=1;
+function openHabitEditor(id, defaultType){
+  const kid=activeKid();
+  const h = id ? kid.habits.find(x=>x.id===id) : null;
+  _editHabitId=id;
+  _typeSel = h ? (h.type||"good") : (defaultType||"good");
+  _emojiSel = h ? h.emoji : (_typeSel==="bad"?EMOJI_BAD[0]:"📚");
+  _ptsSel = h ? (h.points||1) : 1;
+  openSheet(`
+    <h2>${h?"✏️ Editar":"➕ Nueva"}</h2>
+    <div class="sub">Elige tipo, dibujo, nombre y cuántos puntos vale</div>
+    <div class="field">
+      <label>Tipo</label>
+      <div class="seg" id="typeSeg">
+        <button data-t="good">✨ Buena (suma)</button>
+        <button data-t="bad">💪 A mejorar (resta)</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Nombre</label>
+      <input type="text" id="habitName" placeholder="Ej: Hacer la cama" value="${h?h.name.replace(/"/g,'&quot;'):''}">
+    </div>
+    <div class="field">
+      <label>Dibujo</label>
+      <div class="emoji-pick" id="emojiPick"></div>
+    </div>
+    <div class="field">
+      <label>Puntos</label>
+      <div class="pts-pick" id="ptsPick">
+        <button data-p="1">1</button><button data-p="2">2</button><button data-p="3">3</button>
+      </div>
+    </div>
+    <button class="btn" onclick="saveHabit()">Guardar</button>
+    <button class="btn ghost" onclick="showSettings()">Cancelar</button>`);
+  drawTypeSeg(); drawEmojiPick(); drawPtsPick();
+  document.getElementById("habitName").focus();
+}
+function drawTypeSeg(){
+  const seg=document.getElementById("typeSeg");
+  [...seg.children].forEach(b=>{
+    b.className=""; if(b.dataset.t===_typeSel) b.classList.add("sel", _typeSel==="bad"?"neg":"pos");
+    b.onclick=()=>{ _typeSel=b.dataset.t; _emojiSel=(_typeSel==="bad"?EMOJI_BAD[0]:"📚"); drawTypeSeg(); drawEmojiPick(); };
+  });
+}
+function drawEmojiPick(){
+  const pick=document.getElementById("emojiPick"); pick.innerHTML="";
+  (_typeSel==="bad"?EMOJI_BAD:EMOJI_GOOD).forEach(e=>{
+    const b=document.createElement("button"); b.textContent=e; if(e===_emojiSel)b.classList.add("sel");
+    b.onclick=()=>{ _emojiSel=e; [...pick.children].forEach(c=>c.classList.remove("sel")); b.classList.add("sel"); };
+    pick.appendChild(b);
+  });
+}
+function drawPtsPick(){
+  const pick=document.getElementById("ptsPick");
+  [...pick.children].forEach(b=>{ b.classList.toggle("sel", Number(b.dataset.p)===_ptsSel); b.onclick=()=>{ _ptsSel=Number(b.dataset.p); drawPtsPick(); }; });
+}
+function saveHabit(){
+  const kid=activeKid();
+  const name=document.getElementById("habitName").value.trim();
+  if(!name){ toast("Escribe un nombre 🙂"); return; }
+  if(_editHabitId){
+    const h=kid.habits.find(x=>x.id===_editHabitId);
+    h.name=name; h.emoji=_emojiSel; h.type=_typeSel; h.points=_ptsSel;
+  }else{
+    kid.habits.push({id:uid(), name, emoji:_emojiSel, type:_typeSel, points:_ptsSel});
+  }
+  save(); render(); showSettings();
+}
+function deleteHabit(id){
+  const kid=activeKid();
+  if(!confirm("¿Borrar esto?")) return;
+  kid.habits=kid.habits.filter(h=>h.id!==id);
+  for(const d in kid.log){ delete kid.log[d][id]; }
+  save(); render(); showSettings();
+}
+
+/* ---------- Editor de niño/a ---------- */
+let _kidEmoji="👧", _kidColor=COLORS[0], _editKidId=null;
+function openKidEditor(id){
+  const k = id ? state.kids.find(x=>x.id===id) : null;
+  _editKidId=id;
+  _kidEmoji = k ? k.emoji : EMOJI_KID[0];
+  _kidColor = k ? k.color : COLORS[Math.floor(Math.random()*COLORS.length)];
+  openSheet(`
+    <h2>${k?"✏️ Editar niño/a":"➕ Nuevo niño/a"}</h2>
+    <div class="sub">Cada niño tiene sus propias tareas y estrellas</div>
+    <div class="field"><label>Nombre</label><input type="text" id="kidName" placeholder="Ej: Mateo" value="${k?k.name.replace(/"/g,'&quot;'):''}"></div>
+    <div class="field"><label>Avatar</label><div class="emoji-pick" id="kidEmojiPick"></div></div>
+    <div class="field"><label>Color favorito</label><div class="color-pick" id="kidColorPick"></div></div>
+    <button class="btn" onclick="saveKid()">Guardar</button>
+    <button class="btn ghost" onclick="showSettings()">Cancelar</button>`);
+  const ep=document.getElementById("kidEmojiPick");
+  EMOJI_KID.forEach(e=>{ const b=document.createElement("button"); b.textContent=e; if(e===_kidEmoji)b.classList.add("sel"); b.onclick=()=>{ _kidEmoji=e; [...ep.children].forEach(c=>c.classList.remove("sel")); b.classList.add("sel"); }; ep.appendChild(b); });
+  const cp=document.getElementById("kidColorPick");
+  COLORS.forEach(c=>{ const b=document.createElement("button"); b.style.background=c; if(c===_kidColor)b.classList.add("sel"); b.onclick=()=>{ _kidColor=c; [...cp.children].forEach(x=>x.classList.remove("sel")); b.classList.add("sel"); }; cp.appendChild(b); });
+}
+function saveKid(){
+  const name=document.getElementById("kidName").value.trim();
+  if(!name){ toast("Escribe un nombre 🙂"); return; }
+  if(_editKidId){
+    const k=state.kids.find(x=>x.id===_editKidId); k.name=name; k.emoji=_kidEmoji; k.color=_kidColor;
+  }else{
+    const nk=makeKid(uid(), name, _kidEmoji, _kidColor); state.kids.push(nk); state.activeKidId=nk.id;
+  }
+  save(); render(); showSettings();
+}
+function deleteKid(id){
+  if(state.kids.length<=1){ toast("Tiene que haber al menos un niño/a"); return; }
+  const k=state.kids.find(x=>x.id===id);
+  if(!confirm(`¿Borrar a ${k.name} y todas sus estrellas?`)) return;
+  state.kids=state.kids.filter(x=>x.id!==id);
+  if(state.activeKidId===id) state.activeKidId=state.kids[0].id;
+  save(); render(); showSettings();
+}
+function resetKidToday(){
+  const kid=activeKid();
+  if(!confirm(`¿Borrar todo lo marcado hoy de ${kid.name}?`)) return;
+  delete kid.log[TODAY]; save(); render(); showSettings();
+}
+function setPin(){
+  const v=document.getElementById("pinSet").value.trim();
+  if(v && !/^\d{4}$/.test(v)){ toast("El PIN debe tener 4 números"); return; }
+  state.pin=v; save(); toast(v?"PIN guardado 🔒":"PIN quitado");
+}
+
+/* ---------- Exportar / Importar ---------- */
+function exportData(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=`mis-estrellas-${TODAY}.json`; a.click(); URL.revokeObjectURL(url);
+  toast("Copia descargada 📤");
+}
+function importData(ev){
+  const file=ev.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(!data.kids||!Array.isArray(data.kids)) throw new Error("formato");
+      if(!confirm("Esto reemplazará los datos actuales. ¿Seguro?")) return;
+      state=migrate(data);
+      if(!state.activeKidId||!state.kids.find(k=>k.id===state.activeKidId)) state.activeKidId=state.kids[0].id;
+      save(); closeSheet(); render(); toast("Datos importados ✅");
+    }catch(e){ toast("Archivo no válido 😕"); }
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- Modal ---------- */
+function openSheet(html){ document.getElementById("sheet").innerHTML=html; document.getElementById("overlay").classList.add("open"); }
+function closeSheet(){ document.getElementById("overlay").classList.remove("open"); }
+document.getElementById("overlay").addEventListener("click", e=>{ if(e.target.id==="overlay") closeSheet(); });
+
+/* ---------- init ---------- */
+setSyncUI();
+render();
+if(syncOn()) doPull();                       // al abrir, trae lo último de la nube
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && syncOn()) doPull(); });
+window.addEventListener("focus", ()=>{ if(syncOn()) doPull(); });
+window.addEventListener("beforeunload", save);
+</script>
+</body>
+</html>
