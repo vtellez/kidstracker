@@ -234,11 +234,13 @@
   .editrow{display:flex; align-items:center; gap:10px; background:#f8f6ff; border-radius:14px; padding:8px 10px;}
   .editrow.neg{background:#fff6ec;}
   .editrow .e{font-size:24px;}
-  .editrow .n{flex:1; font-weight:800;}
+  .editrow .n{flex:1; min-width:0; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .editrow .tag{font-size:11px; font-weight:800; border-radius:999px; padding:2px 8px;}
   .editrow .tag.pos{background:#eafff5; color:#0d9b6c;}
   .editrow .tag.neg{background:#fff3e0; color:var(--bad2);}
   .editrow button{font-size:18px; padding:6px 10px; border-radius:10px; background:#fff;}
+  .editrow button.ord{font-size:15px; padding:6px 7px; color:var(--accent); font-weight:900;}
+  .editrow button.ord:disabled{opacity:.25;}
   .pin{letter-spacing:.3em; text-align:center; font-size:24px !important;}
   .hidden{display:none !important;}
 
@@ -1268,28 +1270,32 @@ function renderEditLists(){
   const gl=document.getElementById("goodList");
   if(gl){
     gl.innerHTML="";
-    goodHabits(kid).forEach(h=>{
+    const goods=goodHabits(kid);
+    goods.forEach((h,i)=>{
       const row=document.createElement("div"); row.className="editrow";
       row.innerHTML=`<span class="e">${h.emoji}</span><span class="n">${h.name}</span>
         <span class="tag pos">+${h.points||1}</span>
+        ${orderBtns(h.id, i, goods.length)}
         <button onclick="openHabitEditor('${h.id}')">✏️</button>
         <button onclick="deleteHabit('${h.id}')">🗑️</button>`;
       gl.appendChild(row);
     });
-    if(!goodHabits(kid).length) gl.innerHTML=`<div class="empty">Sin tareas todavía</div>`;
+    if(!goods.length) gl.innerHTML=`<div class="empty">Sin tareas todavía</div>`;
   }
   const bl=document.getElementById("badList");
   if(bl){
     bl.innerHTML="";
-    badHabits(kid).forEach(h=>{
+    const bads=badHabits(kid);
+    bads.forEach((h,i)=>{
       const row=document.createElement("div"); row.className="editrow neg";
       row.innerHTML=`<span class="e">${h.emoji}</span><span class="n">${h.name}</span>
         <span class="tag neg">-${h.points||1}</span>
+        ${orderBtns(h.id, i, bads.length)}
         <button onclick="openHabitEditor('${h.id}')">✏️</button>
         <button onclick="deleteHabit('${h.id}')">🗑️</button>`;
       bl.appendChild(row);
     });
-    if(!badHabits(kid).length) bl.innerHTML=`<div class="empty">Nada que mejorar 🎉</div>`;
+    if(!bads.length) bl.innerHTML=`<div class="empty">Nada que mejorar 🎉</div>`;
   }
   const kl=document.getElementById("kidList");
   if(kl){
@@ -1379,6 +1385,23 @@ function deleteHabit(id){
   kid.habits=kid.habits.filter(h=>h.id!==id);
   for(const d in kid.log){ delete kid.log[d][id]; }
   save(); render(); showSettings();
+}
+/* --- reordenar tareas (flechas ↑/↓) --- */
+function orderBtns(id, i, len){
+  return `<button class="ord" onclick="moveHabit('${id}',-1)" ${i===0?'disabled':''}>↑</button>
+        <button class="ord" onclick="moveHabit('${id}',1)" ${i===len-1?'disabled':''}>↓</button>`;
+}
+function moveHabit(id, dir){
+  const kid=activeKid();
+  const h=kid.habits.find(x=>x.id===id); if(!h) return;
+  const isBad = h.type==="bad";
+  const sameType = kid.habits.filter(x=> (x.type==="bad")===isBad); // mueve solo dentro de su lista
+  const pos = sameType.findIndex(x=>x.id===id);
+  const neighbor = sameType[pos+dir];
+  if(!neighbor) return; // ya está en el extremo
+  const i = kid.habits.indexOf(h), j = kid.habits.indexOf(neighbor);
+  kid.habits[i]=neighbor; kid.habits[j]=h;
+  save(); render(); renderEditLists(); // refresca pantalla y la lista de ajustes
 }
 
 /* ---------- Editor de niño/a ---------- */
