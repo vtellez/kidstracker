@@ -465,15 +465,38 @@ async function doPush(){
   catch(e){ setSyncUI("error"); console.warn("push:", e.message); }
 }
 async function doPull(){
-  if(!syncOn()) return;
+  if(!syncOn()) return false;
   try{
     const cloud = await jbRead(sync.key, sync.binId);
+    let applied = false;
     if(cloud && Array.isArray(cloud.kids) && (cloud.updatedAt||0) > (state.updatedAt||0)){
-      applyCloud(cloud);
+      applyCloud(cloud); applied = true;
     }
     setSyncUI("ok");
-  }catch(e){ setSyncUI("error"); console.warn("pull:", e.message); }
+    return applied;
+  }catch(e){ setSyncUI("error"); console.warn("pull:", e.message); return false; }
 }
+
+/* --- sondeo "casi en tiempo real" sin reventar la cuota gratis ---
+   Consulta la nube cada POLL_MS solo si la app está en primer plano,
+   y se autopausa si nadie la toca ni llegan cambios (IDLE_STOP_MS),
+   para que una tablet abierta y olvidada no agote las 10k req/mes. */
+const POLL_MS = 15000;        // cada cuánto comprueba estando visible
+const IDLE_STOP_MS = 90000;   // sin interacción ni cambios → deja de consultar
+let pollTimer = null, pulling = false, lastActivity = Date.now();
+function bumpActivity(){ lastActivity = Date.now(); startPolling(); }
+function startPolling(){
+  if(pollTimer || !syncOn() || document.hidden) return;
+  pollTimer = setInterval(async ()=>{
+    if(document.hidden || (Date.now() - lastActivity > IDLE_STOP_MS)){ stopPolling(); return; }
+    if(pulling) return;                 // evita solapes si una consulta tarda
+    pulling = true;
+    const applied = await doPull();
+    pulling = false;
+    if(applied){ lastActivity = Date.now(); toast("Cambios nuevos ⬇️"); }
+  }, POLL_MS);
+}
+function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
 function applyCloud(s){
   state = migrate(s);
   if(!state.activeKidId || !state.kids.find(k=>k.id===state.activeKidId)) state.activeKidId = state.kids[0]?.id;
@@ -1322,9 +1345,11 @@ async function autoJoinFromUrl(){
 /* ---------- init ---------- */
 setSyncUI();
 render();
-autoJoinFromUrl().then(joined=>{ if(!joined && syncOn()) doPull(); });  // enlace QR o, si no, trae lo último de la nube
-document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && syncOn()) doPull(); });
-window.addEventListener("focus", ()=>{ if(syncOn()) doPull(); });
+autoJoinFromUrl().then(joined=>{ if(!joined && syncOn()) doPull(); startPolling(); });  // enlace QR o, si no, trae lo último de la nube
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ stopPolling(); } else if(syncOn()){ bumpActivity(); doPull(); } });
+window.addEventListener("focus", ()=>{ if(syncOn()){ bumpActivity(); doPull(); } });
+// cualquier toque/tecla reactiva el sondeo y reinicia el contador de inactividad
+["pointerdown","keydown","touchstart"].forEach(ev=> document.addEventListener(ev, bumpActivity, {passive:true}));
 window.addEventListener("beforeunload", save);
 </script>
 </body>
