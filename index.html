@@ -63,7 +63,7 @@
 
   /* ---------- Hero ---------- */
   .hero{
-    background:linear-gradient(135deg, var(--accent), var(--accent2));
+    background:var(--accent); /* color plano del niño (sin gradiente a rosa) */
     color:#fff; border-radius:var(--radius); padding:18px 20px; margin:8px 0 16px;
     box-shadow:var(--shadow); position:relative; overflow:hidden;
   }
@@ -108,10 +108,13 @@
   .habit .emoji{font-size:42px; line-height:1; transition:transform .2s;}
   .habit .name{font-size:14px; font-weight:800; color:var(--ink); line-height:1.15;}
   .habit .star{position:absolute; top:8px; right:9px; font-size:20px; opacity:.18; transition:.25s;}
-  .habit.done{border-color:var(--good); background:linear-gradient(180deg,#f0fff8,#ffffff);}
-  .habit.done .star{opacity:1; transform:scale(1.25) rotate(8deg);}
-  .habit.done .emoji{transform:scale(1.08);}
-  .habit.done::after{content:"¡Bien!"; position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:800; color:var(--good);}
+  .habit.done{border-color:var(--good); background:linear-gradient(180deg,#b6f2d8,#e6fbf1); box-shadow:0 8px 20px rgba(52,211,153,.38);}
+  .habit.done .name{color:#0a8f5f;}
+  .habit.done .star{opacity:1; transform:scale(1.3) rotate(8deg); filter:drop-shadow(0 2px 4px rgba(52,211,153,.5));}
+  .habit.done .emoji{transform:scale(1.1);}
+  /* insignia de conseguido: check verde, más visual que el texto */
+  .habit.done::after{content:"✓"; position:absolute; top:7px; left:8px; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background:var(--good); color:#fff; font-size:14px; font-weight:900; box-shadow:0 3px 8px rgba(52,211,153,.5);}
+  .habit.done .pts{left:auto; right:38px;}
   .habit .pts{position:absolute; top:8px; left:9px; font-size:11px; font-weight:800; color:var(--muted); background:#f3f0ff; border-radius:999px; padding:1px 7px;}
 
   /* negative habits */
@@ -1113,7 +1116,7 @@ function toggleGood(habitId, ev){
   const kid = activeKid();
   if(!kid.log[TODAY]) kid.log[TODAY]={};
   const was = !!kid.log[TODAY][habitId];
-  if(was) delete kid.log[TODAY][habitId];
+  if(was){ delete kid.log[TODAY][habitId]; dropStar(ev); unstar(); }
   else { kid.log[TODAY][habitId]=true; pop(ev); ding(); }
   save(); render();
 
@@ -1155,6 +1158,8 @@ function tone(freq,start,dur,vol=0.15,type="sine"){
 function ding(){ tone(880,0,0.18); tone(1320,0.05,0.2); }
 function fanfare(){ [523,659,784,1047].forEach((f,i)=>tone(f,i*0.12,0.3,0.18)); }
 function thud(){ tone(320,0,0.18,0.12,"triangle"); tone(220,0.06,0.22,0.12,"triangle"); }
+/* "se va una estrella" (desmarcar por error): glissando suave hacia abajo, sin tono de castigo */
+function unstar(){ tone(740,0,0.12,0.12,"sine"); tone(520,0.07,0.16,0.12,"sine"); tone(370,0.15,0.18,0.10,"sine"); }
 
 /* ---------- Animaciones ---------- */
 function flyEmojis(ev, set, up){
@@ -1175,6 +1180,7 @@ function flyEmojis(ev, set, up){
 }
 function pop(ev){ flyEmojis(ev, ["⭐","✨","🌟"], true); }
 function puff(ev){ flyEmojis(ev, ["💨","😕","💢"], false); }
+function dropStar(ev){ flyEmojis(ev, ["⭐","💫","✨"], false); } // estrella que se cae al desmarcar
 
 function celebrate(){
   const cv=document.getElementById("confetti"), ctx=cv.getContext("2d");
