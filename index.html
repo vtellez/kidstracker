@@ -349,11 +349,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
    Datos en localStorage. 100% sin servidor.
    ========================================================= */
 
+const APP_VERSION = 1;   // ⬆️ súbelo en cada despliegue para forzar recarga en las webapps guardadas
 const STORAGE_KEY = "misEstrellas.v2";
 const COLORS = ["#7c5cff","#ff7ab8","#34d399","#ffb23c","#4cc9f0","#f4709a","#a06cf0","#ff8a5c"];
-const EMOJI_KID = ["👧","👦","🧒","👶","🐱","🐶","🦄","🐼","🦊","🐢","🐰","🐯","🌟","🚀","🦋","🐙"];
-const EMOJI_GOOD = ["🛏️","🍳","🧽","🧸","📚","🦷","🚿","🥗","💧","🧹","👕","🎒","🐾","🌳","✍️","🎨","🧩","⚽","🎹","🙏","🧘","💤","🪥","🧴","🍎","🥦","🧦","🗑️"];
-const EMOJI_BAD  = ["😤","😭","😠","🙊","😖","🛑","📱","🍬","😢","🙅","💢","🗯️","😾","🫠","🙄","😫","⏰","🤥"];
+const EMOJI_KID = ["👧","👦","🧒","👶","👩","👨","🧑","👸","🤴","🦸","🦹","🧚","🧜","🧙","🥷","🤖","👾","🐱","🐶","🦄","🐼","🦊","🐢","🐰","🐯","🐵","🐸","🐧","🐥","🦁","🐮","🐷","🐨","🐔","🦉","🐝","🐞","🐬","🐳","🦖","🐲","🌟","⭐","🌈","🚀","🦋","🐙","🎈","👑","🍭"];
+const EMOJI_GOOD = ["🛏️","🍳","🧽","🧸","📚","🦷","🚿","🥗","💧","🧹","👕","🎒","🐾","🌳","✍️","🎨","🧩","⚽","🎹","🙏","🧘","💤","🪥","🧴","🍎","🥦","🧦","🗑️","🏃","🚴","🤸","🏊","🏀","🏐","🥋","🚲","🛴","🥕","🍌","🍇","🍓","🥛","🥪","🍽️","🥄","🐕","🐈","📖","🔢","🔤","🖍️","🖌️","🎵","🎤","🥁","🎸","🎻","🌻","🪴","☀️","🤝","❤️","🫶","😊","👏","👟","👔","💪","🏆","🎯","🥇","🧼","🚽","📝","🗣️","🤗","🧠","🪀","🧺"];
+const EMOJI_BAD  = ["😤","😭","😠","🙊","😖","🛑","📱","🍬","😢","🙅","💢","🗯️","😾","🫠","🙄","😫","⏰","🤥","😡","🤬","👊","🦶","🍔","🍟","🥤","🍫","🍩","🍕","🎮","📺","🛋️","🛌","🥱","😒","🤳","🙉","😪","🧨","🤛","💤"];
 
 /* Hábitos de verano por defecto */
 const DEFAULT_GOOD = [
@@ -1494,12 +1495,38 @@ async function autoJoinFromUrl(){
   return true;
 }
 
+/* ---------- auto-actualización (Safari/Chrome guardan la webapp y cachean el HTML) ----------
+   Al abrir/volver, pide el HTML real a la red (saltándose la caché) y, si hay una
+   versión más nueva publicada, recarga con un parámetro distinto para forzar bajarla.
+   El guard de sesión evita recargas en bucle si el CDN aún sirve la versión vieja. */
+let _updChecking = false;
+async function checkForUpdate(){
+  if(_updChecking || !navigator.onLine) return;
+  _updChecking = true;
+  try{
+    const base = location.href.split("#")[0].split("?")[0];
+    const res = await fetch(base + "?_=" + Date.now(), { cache:"no-store" });
+    if(res.ok){
+      const m = (await res.text()).match(/const APP_VERSION\s*=\s*(\d+)/);
+      const remote = m ? Number(m[1]) : 0;
+      const tried = Number(sessionStorage.getItem("msUpdTo") || 0);
+      if(remote > APP_VERSION && remote > tried){
+        sessionStorage.setItem("msUpdTo", remote);
+        location.replace(base + "?v=" + remote);   // URL nueva → el navegador la baja de red
+        return;
+      }
+    }
+  }catch(e){}
+  _updChecking = false;
+}
+
 /* ---------- init ---------- */
 setSyncUI();
 render();
 autoJoinFromUrl().then(joined=>{ if(!joined && syncOn()) doPull(); startPolling(); });  // enlace QR o, si no, trae lo último de la nube
-document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ stopPolling(); } else if(syncOn()){ bumpActivity(); doPull(); } });
-window.addEventListener("focus", ()=>{ if(syncOn()){ bumpActivity(); doPull(); } });
+checkForUpdate();
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ stopPolling(); } else { checkForUpdate(); if(syncOn()){ bumpActivity(); doPull(); } } });
+window.addEventListener("focus", ()=>{ checkForUpdate(); if(syncOn()){ bumpActivity(); doPull(); } });
 // cualquier toque/tecla reactiva el sondeo y reinicia el contador de inactividad
 ["pointerdown","keydown","touchstart"].forEach(ev=> document.addEventListener(ev, bumpActivity, {passive:true}));
 window.addEventListener("beforeunload", save);
