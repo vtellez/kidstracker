@@ -377,7 +377,9 @@ const LEVELS = [
   {min:320,  badge:"🦄", name:"Mágica"},
 ];
 
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
 let state = load();
+let lastSnapshot = clone(state); // foto del estado tras el último save/merge, para detectar qué cambió
 
 /* ---------- Persistencia ---------- */
 function load(){
@@ -410,14 +412,49 @@ function migrate(s){
     if(k.weekGoal.minPerDay==null) k.weekGoal.minPerDay = 3;
     if(k.weekGoal.stars==null) k.weekGoal.stars = 25;
     if(k.weekWon==null) k.weekWon = "";
+    if(!k._t || typeof k._t !== "object") k._t = {}; // marcas de tiempo de merge
+    if(typeof k._t.meta !== "number") k._t.meta = 0;  // metadatos del niño
+    if(!k._t.days || typeof k._t.days !== "object") k._t.days = {}; // _t.days[día][habitId] = ms
   });
   return s;
 }
 function saveLocal(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
 function save(){
-  state.updatedAt = Date.now();
+  const now = Date.now();
+  stampChanges(now);          // sella _t.meta / _t[día] de lo que haya cambiado desde el último save
+  state.updatedAt = now;
+  lastSnapshot = clone(state);
   saveLocal();
   schedulePush(); // sube a la nube si hay sincronización activa
+}
+/* Compara state con la última foto y pone marca de tiempo a los metadatos del niño
+   (nombre, emoji, color, hábitos, objetivo) y a cada día del log que haya cambiado.
+   Centralizado aquí para no tener que tocar cada función que muta. */
+const KID_META = ["name","emoji","color","habits","weekGoal","weekWon"];
+function metaSig(k){ const o={}; KID_META.forEach(f=> o[f]=k[f]); return JSON.stringify(o); }
+function cellSig(v){ return JSON.stringify(v===undefined?null:v); }
+function stampChanges(now){
+  (state.kids||[]).forEach(k=>{
+    if(!k._t) k._t = { meta:0, days:{} };
+    k._t.days = k._t.days || {};
+    const prev = (lastSnapshot.kids||[]).find(p=>p.id===k.id);
+    if(!prev){ // niño nuevo: sella todo
+      k._t.meta = now;
+      for(const d in (k.log||{})){ k._t.days[d] = k._t.days[d]||{}; for(const h in k.log[d]) k._t.days[d][h] = now; }
+      return;
+    }
+    if(metaSig(k) !== metaSig(prev)) k._t.meta = now;
+    const days = new Set([...Object.keys(k.log||{}), ...Object.keys(prev.log||{})]);
+    days.forEach(d=>{
+      const cur = (k.log||{})[d] || {}, old = (prev.log||{})[d] || {};
+      const cells = new Set([...Object.keys(cur), ...Object.keys(old)]);
+      cells.forEach(h=>{
+        if(cellSig(cur[h]) !== cellSig(old[h])){ // celda añadida, cambiada o borrada → tombstone
+          k._t.days[d] = k._t.days[d] || {}; k._t.days[d][h] = now;
+        }
+      });
+    });
+  });
 }
 
 /* =========================================================
@@ -461,19 +498,25 @@ function schedulePush(){
 }
 async function doPush(){
   if(!syncOn()) return;
-  try{ await jbUpdate(sync.key, sync.binId, state); setSyncUI("ok"); }
-  catch(e){ setSyncUI("error"); console.warn("push:", e.message); }
+  try{
+    // leer-combinar-escribir: así la subida nunca pisa lo que otro dispositivo metió mientras tanto
+    try{
+      const cloud = await jbRead(sync.key, sync.binId);
+      if(cloud && Array.isArray(cloud.kids)) ingestCloud(cloud); // adopta lo de la nube antes de subir
+    }catch(e){ /* si el read falla, subimos lo local igualmente */ }
+    await jbUpdate(sync.key, sync.binId, state);
+    setSyncUI("ok");
+  }catch(e){ setSyncUI("error"); console.warn("push:", e.message); }
 }
 async function doPull(){
   if(!syncOn()) return false;
   try{
     const cloud = await jbRead(sync.key, sync.binId);
-    let applied = false;
-    if(cloud && Array.isArray(cloud.kids) && (cloud.updatedAt||0) > (state.updatedAt||0)){
-      applyCloud(cloud); applied = true;
-    }
+    if(!cloud || !Array.isArray(cloud.kids)){ setSyncUI("ok"); return false; }
+    const { changedLocal, divergesFromCloud } = ingestCloud(cloud);
     setSyncUI("ok");
-    return applied;
+    if(divergesFromCloud) schedulePush(); // el merge aporta algo que la nube no tenía → reconverge
+    return changedLocal;
   }catch(e){ setSyncUI("error"); console.warn("pull:", e.message); return false; }
 }
 
@@ -497,10 +540,90 @@ function startPolling(){
   }, POLL_MS);
 }
 function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
-function applyCloud(s){
-  state = migrate(s);
-  if(!state.activeKidId || !state.kids.find(k=>k.id===state.activeKidId)) state.activeKidId = state.kids[0]?.id;
+/* =========================================================
+   MERGE entre dispositivos (combinar, no reemplazar)
+   - Niños: por id (no se pierden niños creados en otro dispositivo).
+   - Metadatos del niño: gana el de _t.meta más reciente.
+   - Log: día a día, gana el de _t[día] más reciente (días distintos se conservan ambos).
+   - activeKidId: local de cada dispositivo (no se sincroniza).
+   ========================================================= */
+// firma estable e independiente del orden de claves, para comparar estados ignorando lo volátil
+function sortObj(o){ const r={}; Object.keys(o||{}).sort().forEach(k=> r[k]=o[k]); return r; }
+function canon(s){
+  const kids = (s.kids||[]).slice().sort((a,b)=> a.id<b.id?-1:1).map(k=>{
+    const log = {}; Object.keys(k.log||{}).sort().forEach(d=> log[d]=sortObj(k.log[d]));
+    const days = {}; Object.keys((k._t&&k._t.days)||{}).sort().forEach(d=> days[d]=sortObj(k._t.days[d]));
+    const o = { id:k.id }; KID_META.forEach(f=> o[f]=k[f]);
+    o.log=log; o._t={ meta:(k._t&&k._t.meta)||0, days }; return o;
+  });
+  return JSON.stringify({ kids, pin:s.pin||"" });
+}
+function mergeKid(lk, ck){
+  const out = clone(lk);
+  out.log = out.log || {};
+  const lt = lk._t || {meta:0,days:{}}, ct = ck._t || {meta:0,days:{}};
+  const ltD = lt.days||{}, ctD = ct.days||{};
+  // metadatos: gana el más reciente
+  if((ct.meta||0) > (lt.meta||0)) KID_META.forEach(f=> out[f] = clone(ck[f]));
+  out._t = { meta: Math.max(lt.meta||0, ct.meta||0), days: {} };
+  // log por celda (día + hábito); _t.days incluye tombstones de celdas borradas
+  const days = new Set([
+    ...Object.keys(lk.log||{}), ...Object.keys(ck.log||{}),
+    ...Object.keys(ltD), ...Object.keys(ctD)
+  ]);
+  days.forEach(d=>{
+    const lLog = (lk.log||{})[d] || {}, cLog = (ck.log||{})[d] || {};
+    const lDt = ltD[d] || {}, cDt = ctD[d] || {};
+    const cells = new Set([...Object.keys(lLog), ...Object.keys(cLog), ...Object.keys(lDt), ...Object.keys(cDt)]);
+    const outLog = clone(lLog), outDt = {};
+    cells.forEach(h=>{
+      const a = lDt[h]||0, b = cDt[h]||0;
+      if(b > a){ // la nube gana esa celda
+        if(h in cLog) outLog[h] = clone(cLog[h]); else delete outLog[h];
+        outDt[h] = b;
+      } else { outDt[h] = Math.max(a,b); } // conserva la celda local
+    });
+    if(Object.keys(outDt).length) out._t.days[d] = outDt;
+    if(Object.keys(outLog).length) out.log[d] = outLog; else delete out.log[d];
+  });
+  return out;
+}
+function mergeStates(localS, cloudS){
+  const merged = clone(localS);
+  const map = {}, order = [];
+  (localS.kids||[]).forEach(k=>{ map[k.id]={l:k}; order.push(k.id); });
+  (cloudS.kids||[]).forEach(k=>{ if(!map[k.id]){ map[k.id]={}; order.push(k.id); } map[k.id].c=k; });
+  merged.kids = order.map(id=>{ const {l,c}=map[id]; return (l&&c)? mergeKid(l,c) : clone(l||c); });
+  if((cloudS.updatedAt||0) > (localS.updatedAt||0)) merged.pin = cloudS.pin; // pin global: el más reciente
+  merged.updatedAt = Math.max(localS.updatedAt||0, cloudS.updatedAt||0);
+  merged.activeKidId = localS.activeKidId; // se decide localmente en applyMerged
+  return merged;
+}
+function applyMerged(merged){
+  const keep = state.activeKidId;
+  state = merged;
+  state.activeKidId = state.kids.find(k=>k.id===keep) ? keep : state.kids[0]?.id;
+  lastSnapshot = clone(state); // el merge ya está "asentado": el próximo diff parte de aquí
   saveLocal(); render();
+}
+// Al conectar por primera vez: adopta la nube como fuente de verdad (conserva el niño activo local).
+function adoptCloud(cloud){
+  const keep = state.activeKidId;
+  const c = migrate(clone(cloud));
+  c.activeKidId = (c.kids||[]).find(k=>k.id===keep) ? keep : c.kids[0]?.id;
+  state = c; lastSnapshot = clone(state);
+  saveLocal(); render();
+}
+// Combina la nube dentro del estado local. Devuelve si cambió algo local y si el
+// resultado difiere de la nube (para reconverger subiéndolo).
+function ingestCloud(cloud){
+  const cloudM = migrate(clone(cloud));
+  const before = canon(state);
+  const merged = mergeStates(state, cloudM);
+  const after = canon(merged);
+  const changedLocal = (after !== before);
+  if(changedLocal) applyMerged(merged); else { state.updatedAt = merged.updatedAt; lastSnapshot = clone(state); }
+  return { changedLocal, divergesFromCloud: (after !== canon(cloudM)) };
 }
 
 /* --- código de sincronización (lleva clave + binId) --- */
@@ -609,7 +732,7 @@ async function joinWith(cfg){
   try{
     const cloud = await jbRead(cfg.key, cfg.binId);
     sync = cfg; saveSync();
-    if(cloud && Array.isArray(cloud.kids)) applyCloud(cloud);
+    if(cloud && Array.isArray(cloud.kids)) adoptCloud(cloud); // al conectar, la nube es la fuente de verdad
     setSyncUI("ok"); closeSheet();
     toast("✅ Conectado y sincronizado");
   }catch(e){ toast("No se pudo conectar — "+e.message); }
