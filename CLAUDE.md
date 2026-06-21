@@ -1,0 +1,55 @@
+# CLAUDE.md — Mis Estrellas (tracker de hábitos)
+
+Contexto para asistentes de IA que trabajen en este repo.
+
+## Qué es
+App web para gamificar los hábitos diarios de niños/as (pensada para Valeria, 7 años, y su hermano Mateo) con un sistema de estrellas. Objetivo: que el niño la entienda sola y le ayude a cambiar hábitos en verano.
+
+## Principio de diseño clave
+**Todo vive en UN ÚNICO archivo `index.html`** (HTML + CSS + JS embebidos, sin build, sin dependencias, sin framework). Debe poder abrirse con doble clic (`file://`) y funcionar, incluida la sincronización en la nube. **No introducir bundlers, npm, ni dividir en varios archivos** salvo petición explícita.
+
+UI orientada a un niño de ~7 años: emojis grandes, colores, animaciones (estrellas, confeti), sonidos con WebAudio, lenguaje sencillo en español. Todo en **español** (es-ES), con tildes correctas.
+
+## Estructura de `index.html`
+- `<head>`: estilos en un `<style>` con variables CSS en `:root`. Comentario inicial explicando la sincronización.
+- `<body>`: cabecera de marca, hero (saludo + puntuación del día + nivel), secciones (tareas buenas, "cosas a mejorar", semana, gráfico, premio semanal, nivel), y un **dock inferior tipo tab bar** a ancho completo.
+- `<script>` (único, NO module): toda la lógica. Funciones globales llamadas desde `onclick` inline.
+
+## Modelo de datos (localStorage)
+- Clave `misEstrellas.v2`. Función `migrate()` mantiene compatibilidad con datos antiguos.
+- `state = { activeKidId, pin, kids: [...], updatedAt }`
+- `kid = { id, name, emoji, color, habits: [...], weekGoal, weekWon, log }`
+  - `habit = { id, name, emoji, type: "good"|"bad", points: 1..3 }`
+  - `log = { "YYYY-MM-DD": { habitId: true | <conteo> } }` (buenos=`true`; malos=número de veces)
+  - `weekGoal = { mode: "stars"|"days", stars, days, minPerDay, prize }`
+- Puntuación: buenos suman `points`; malos restan `veces * points`. Los negativos **restan al total** (decisión del usuario); el nivel nunca baja de "Semillita".
+
+## Funciones importantes
+- `render()` → orquesta todo: `renderDock`, `renderHabits`, `renderNeg`, `renderWeek`, `renderChart`, `renderWeekPrize`, `renderReward`.
+- `save()` → escribe localStorage (`saveLocal`) + sube a la nube (`schedulePush`). Pone `updatedAt = Date.now()`.
+- Edición protegida por **PIN de papás** opcional (`askPin`).
+
+## Sincronización (JSONBin.io)
+- Sin servidor propio. Config de sync en `localStorage` clave `misEstrellas.sync.v1` = `{ key, binId }` (NO se sincroniza; es por dispositivo).
+- API: `jbCreate` (POST crea bin con la Master Key), `jbRead` (GET), `jbUpdate` (PUT). CORS de JSONBin permite cualquier origen (funciona desde `file://`).
+- **Código de sincronización** = base64 de `{k:key, b:binId}` (`makeCode`/`parseCode`). Es lo único que se comparte entre dispositivos.
+- UX a prueba de errores: un solo campo (`smartSync`) detecta si pegas la **Master Key** (`activateWith` → crea nube) o un **código** (`joinWith` → se conecta). Regla: la clave se usa una vez (1er dispositivo); el resto pegan el código. Pegar la clave en cada dispositivo crearía nubes separadas (error frecuente ya mitigado).
+- Conflictos: gana el `updatedAt` más reciente. Pull al abrir y al volver el foco (sin polling, para no agotar la cuota gratis de 10k req/mes).
+- **QR / enlace para conectar sin teclear**: el panel de sync (cuando ya está activado) muestra un QR generado en local con la librería `qrcode-generator` (1.4.4, MIT) **vendida inline** en su propio `<script>` antes del de lógica (excepción justificada al "single script", sigue siendo un único archivo sin build). El QR codifica `shareUrl()` = URL de la app alojada (o `location` si corre en http) + `#sync=<código>`. Al abrir un enlace así, `autoJoinFromUrl()` parsea el hash, conecta (`joinWith`) y limpia la URL con `history.replaceState`. Botón "Compartir enlace" usa `navigator.share` (móvil) o copia al portapapeles.
+
+## Hosting
+- Repo GitHub público: `git@github.com:vtellez/kidstracker.git` (rama `main`).
+- Alojado SIN GitHub Pages vía proxy CDN: `https://raw.githack.com/vtellez/kidstracker/main/index.html`.
+- `raw.githack.com/.../main/...` cachea; tras un push, usar recarga forzada o la URL fijada a un commit para ver cambios al instante.
+- GitHub Pages es alternativa opcional (Settings → Pages → `main`).
+
+## Flujo de trabajo
+- Editar SIEMPRE en este repo: `/Users/vtellez/Projects/kidstracker`. (Existió una carpeta gemela `kidtracker` sin "s" usada al inicio; la fuente de verdad es este repo.)
+- Validar sintaxis del JS embebido antes de commitear (extraer el `<script>` y `new Function(...)` con Node).
+- Probar visualmente con el preview local (`.claude/launch.json` levanta un `http.server`).
+- Commits en español; cerrar con la línea `Co-Authored-By` cuando aplique.
+
+## Pendientes / ideas no implementadas
+- Estadísticas mensuales para los padres (cumplimiento, hábito más difícil).
+- Autoocultar el dock al hacer scroll.
+- Opción de "día redondo = todas las tareas hechas" como criterio del objetivo por días.
